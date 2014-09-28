@@ -1,0 +1,45 @@
+Linux Libertine G and Linux Biolinum G for LibreOffice DTP
+
+http://www.numbertext.org/linux
+
+(Graphite port of Linux Libertine and Linux Biolinum)
+
+version 2012-01-16
+
+This distribution based on the LinLibertine distribution v5.1.3-2 of
+the Linux Libertine development. For the original TrueType
+and OpenType fonts of the Linux Libertine project, 
+also Linux Libertine C (small caps font), Linux Biolinum Kb (keyboard font)
+and other fonts variants
+
+see
+
+http://linuxlibertine.sourceforge.net,
+
+also origfiles/
+
+
+Documentation
+
+See doc/fontfeatures.pdf.
+
+
+Installation
+
+See origfiles/INSTALL.txt.
+
+Open doc/fontfeatures.odt in LibreOffice after the font installation.
+The result can be seen in doc/fontfeatures.pdf.
+
+
+Source
+
+See src/README
+
+
+Acknowledgements
+
+The development was supported by FSF.hu Foundation, Hungary.
+
+László Németh
+nemeth at numbertext dot org

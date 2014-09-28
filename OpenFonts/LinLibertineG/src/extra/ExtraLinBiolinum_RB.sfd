@@ -1,0 +1,86 @@
+SplineFontDB: 3.0
+FontName: Untitled1
+FullName: Untitled1
+FamilyName: Untitled1
+Weight: Medium
+Copyright: Created by Németh László,,, with FontForge 2.0 (http://fontforge.sf.net)
+UComments: "2011-8-26: Created." 
+Version: 001.000
+ItalicAngle: 0
+UnderlinePosition: -100
+UnderlineWidth: 50
+Ascent: 800
+Descent: 200
+LayerCount: 2
+Layer: 0 0 "Back"  1
+Layer: 1 0 "Fore"  0
+NeedsXUIDChange: 1
+XUID: [1021 657 1927566138 12838225]
+OS2Version: 0
+OS2_WeightWidthSlopeOnly: 0
+OS2_UseTypoMetrics: 1
+CreationTime: 1314367374
+ModificationTime: 1314367519
+OS2TypoAscent: 0
+OS2TypoAOffset: 1
+OS2TypoDescent: 0
+OS2TypoDOffset: 1
+OS2TypoLinegap: 0
+OS2WinAscent: 0
+OS2WinAOffset: 1
+OS2WinDescent: 0
+OS2WinDOffset: 1
+HheadAscent: 0
+HheadAOffset: 1
+HheadDescent: 0
+HheadDOffset: 1
+OS2Vendor: 'PfEd'
+DEI: 91125
+Encoding: UnicodeBmp
+UnicodeInterp: none
+NameList: Adobe Glyph List
+DisplaySize: -24
+AntiAlias: 1
+FitToEm: 1
+WinInfo: 53 53 16
+BeginChars: 65536 1
+
+StartChar: Aacute
+Encoding: 193 193 0
+Width: 701
+Flags: HWO
+HStem: -3 21G 221 53<315.149 339.849 313.549 349.049> 638 20G<314.999 404.999 404.999 404.999> 695 21G<352.95 361.05>
+VStem: 20 101
+LayerCount: 2
+Fore
+SplineSet
+398 843 m 1
+ 425.4 824.3 446 791 455 762 c 1
+ 448 748.1 l 1
+ 296 704 l 2
+ 273.8 697.6 265.1 695 257 695 c 0
+ 248.9 695 241 711 241 720 c 0
+ 241 727 242.8 734.8 256 744 c 2
+ 398 843 l 1
+411.5 275.1 m 1
+ 387.3 338 358.699 411 322.999 494 c 1
+ 317.099 494 l 1
+ 223.599 275.9 l 1
+ 254.999 274.5 299.099 274 327.999 274 c 0
+ 351.699 274 383.1 274.5 411.5 275.1 c 1
+200.299 219.199 m 1
+ 166.199 135.1 136.799 56.2002 120.999 -3 c 1
+ 108.999 0 86.999 0 75.999 0 c 0
+ 64.999 0 31.999 0 19.999 -3 c 1
+ 120.999 218 218.999 436 314.999 658 c 1
+ 404.999 658 l 1
+ 490.999 439 628.999 98 678.999 -3 c 1
+ 661.999 0 604.999 0 587.999 0 c 0
+ 570.999 0 523.999 0 506.999 -3 c 1
+ 500.999 18.7002 479.299 93.7002 432.499 219.7 c 1
+ 399.799 220.4 365.099 221 332.999 221 c 0
+ 297.299 221 238.299 220.1 200.299 219.199 c 1
+EndSplineSet
+EndChar
+EndChars
+EndSplineFont

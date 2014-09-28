@@ -1,0 +1,18 @@
+#!/bin/sh 
+c="Graphite version: Laszlo Nemeth (see http://www.numbertext.org/linux) 2011-07-19"
+./fontname input0/LinBiolinum_RB.ttf input "LinuxBiolinumGB" "Linux Biolinum G Bold" "Linux Biolinum G" "$c"
+./fontname input0/LinBiolinum_R.ttf input "LinuxBiolinumG" "Linux Biolinum G Regular" "Linux Biolinum G" "$c"
+./fontname input0/LinBiolinum_RI.ttf input "LinuxBiolinumGI" "Linux Biolinum G Italic" "Linux Biolinum G" "$c"
+./fontname input0/LinLibertine_R.ttf input "LinuxLibertineG" "Linux Libertine G Regular" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_RI.ttf input "LinuxLibertineGI" "Linux Libertine G Italic" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_RB.ttf input "LinuxLibertineGB" "Linux Libertine G Bold" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_RZ.ttf input "LinuxLibertineGZ" "Linux Libertine G Semibold" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_RBI.ttf input "LinuxLibertineGBI" "Linux Libertine G Bold Italic" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_RZI.ttf input "LinuxLibertineGZI" "Linux Libertine G Semibold Italic" "Linux Libertine G" "$c"
+
+./fontname input0/LinLibertine_DR.ttf input "LinuxLibertineDG" "Linux Libertine G Display Regular" "Linux Libertine Display G" "$c"

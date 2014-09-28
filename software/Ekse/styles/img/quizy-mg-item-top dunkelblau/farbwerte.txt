@@ -1,0 +1,3 @@
+headerBackgroundColor: #FFAD40
+lineColor: #BF8230
+Color: #033E6B

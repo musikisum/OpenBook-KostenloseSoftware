@@ -1,0 +1,1438 @@
+#!/usr/bin/python
+# -*- encoding: UTF-8 -*-
+# otf2gdl
+
+import fontforge
+import psMat
+import re
+import string
+import sys
+import codecs
+import gdldef
+import unicodedata
+
+LIBERTINE_I = "Libertine_RI."
+LIBERTINE_R = "Libertine_R."
+LIBERTINE_D = "Libertine_DR."
+
+lang = {
+	"dflt": "",
+	"AFK ": "af", 
+	"AZE ": "az",
+	"CAT ": "ca",	
+	"CRT ": "crh",
+	"CSY ": "cs",
+	"DAN ": "da",
+	"DEU ": "de",
+	"ELL ": "el",
+	"ENG ": "en",
+	"EO  ": "eo",
+	"ESP ": "es",
+	"FIN ": "fi",
+	"FRA ": "fr",
+	"HUN ": "hu",
+	"MOL ": "none",
+	"NLD ": "nl",
+	"ITA ": "it",
+	"LTZ ": "lb",
+	"PLK ": "pl",
+	"PTG ": "pt",
+	"ROM ": "ro",
+	"RUS ": "ru",
+	"SLV ": "sl",
+	"SRB ": "sr",
+	"SRPL": "sh",
+	"SVE ": "sv",
+	"TRK ": "tr"
+}
+
+if len(sys.argv) == 1:
+	print "otf2gdl - OpenType to Graphite GDL converter"
+	print "Usage: otf2gdl [-e] font.otf [font.gdl]"
+	print "Options: -e: extended font with heavy asterisk for footnote numbering"
+	sys.exit(1)
+
+extended = False
+params = sys.argv[1:]
+if params[0] == "-e":
+	extended = True
+	params = params[1:]
+
+print params[0]
+font=fontforge.open(params[0])
+
+if len(params) == 2:
+	out = codecs.open(params[1], "wb", encoding="UTF-8")
+else:
+	out = codecs.open(re.sub("[.][^.]*$", "", params[0]) + ".gdl", "wb", encoding="UTF-8")
+
+kern_classes = []	# declaration of kerning classes
+kern_pos = []		# position table of kerning data
+
+def kerning(kerningclass, subtable):
+	global kern_classes, kern_pos
+	l = len(kerningclass[0])
+	r = len(kerningclass[1])
+	kern_classes = get_kern_classes(kern_classes, "kernl", subtable, kerningclass[0])
+	kern_classes = get_kern_classes(kern_classes, "kernr", subtable, kerningclass[1])
+	data = kerningclass[2]
+	for i in range(0, len(data)):
+		if data[i] <> 0:
+			kern_pos.append("kernr_" + subtable + "_" + str(i % r) + " { kern.x += " + str(data[i]) + "m } / kernl_" + subtable + "_" + str(i / r) + " [diaComb? diaComb]?  _ ;")
+#			kern_pos.append("kernr_" + subtable + "_" + str(i % r) + " diaComb { kern.x += " + str(data[i]) + "m } / ^ kernl_" + subtable + "_" + str(i / r) + " diaD? _ _ ;")
+
+
+def get_kern_classes(array, name, subtable, data):
+	for i in range(1, len(data)):
+		array.append(name + "_" + subtable + "_" + str(i) + " = p" + str(data[i]) + ";")
+	return array
+
+# convert kerning data to GDL
+
+# print >>out, font.getLookupSubtableAnchorClasses(font.getLookupSubtables(font.gsub_lookups[1])[0])
+
+features = []
+letters = set() # set of letters
+numbers = set() # set of numbers
+lookups = {} # substitutions
+lookupl = {} # ligatures
+dotlessi = False
+Libertine_It = False
+Qu_sc = False
+f_f_j = False
+Germandbls_alt = False
+f_corr = "f_corr = p(\"f\");"
+ff_corr = "ff_corr = p(\"f_f\")"
+onefifth = False
+glyphs_uni = set()
+cpsp = {}
+cpsp_table = ""
+anchorbase = []
+anchorbasechar = {}
+anchormark = []
+
+k = 0
+
+for i in font.gpos_lookups:
+	if i[1:5] == "kern" or i.find("(kerning)") > -1:
+		try:
+			kerning(font.getKerningClass(font.getLookupSubtables(i)[0]), str(k))
+			k = k + 1
+		except:
+			pass
+	elif i[1:5] == "cpsp":
+		cpsp_table = font.getLookupSubtables(i)[0]
+
+def lookup_glyph(name, l):
+	if l[1] == "Substitution":
+		try:
+			lookups[l[0]][0].append(name)
+			lookups[l[0]][1].append(l[2])
+		except:
+			lookups[l[0]] = ([name], [l[2]])
+		if l[0][1:5] == "salt":
+			n = str(len(lookups[l[0]][0]))
+			if len(n) == 1:
+				m = "0" + n
+			lookups["'sa" + m + "' Stylistic alternative"] = ([name], [l[2]])
+	elif l[1] == "Ligature":
+		try:
+			lookupl[l[0]][0].append(name)
+			lookupl[l[0]][1].append(l[2:])
+		except:
+			lookupl	[l[0]] = ([name], [l[2:]])
+	elif l[1] == "Position" and l[0] == cpsp_table:
+		try:
+			cpsp["cpsp" + str(l[4])].append(name) 
+		except:
+			cpsp["cpsp" + str(l[4])] = [name]
+
+if extended and (params[1].find(LIBERTINE_I) > -1):
+	Libertine_It = True
+	letters = letters | set(["g_y", "j.short", "f_j", "f_f_j", "uni00AD", "uniE0FA", "uniE0FC", "uniE0FD"])
+
+if extended and params[1].find("Libertine_RBI") > -1:
+	letters = letters | set(["uniE0FA", "uniE0FC", "uniE0FD"])
+
+if "Libertine_DR" in params[1]:
+	letters = letters | set(["uniE033", "f_j"])
+
+if extended and (params[1].find("Libertine_RZI") > -1 or params[1].find("Libertine_RBI") > -1):
+	letters = letters | set(["g_y", "j.short", "uniE033", "uniE037"])
+
+if extended and params[1].find("Libertine_RB") > -1:
+	letters = letters | set(["uniE033", "j.short"])
+
+if extended and params[1].find("Libertine_RZ") > -1:
+	letters = letters | set(["uniE033"])
+
+ann = 0
+
+fixmark = {}
+# diacritics fix for double-stroke letters
+dblsa = ["A", "B", "D", "E", "F", "G", "I", "J", "K", "L", "M", "N", "O", "P", "S", "T", "U", "V", "W", "X", "Y"]
+dblsb = [ "u1D538", "u1D539", "u1D53B", "u1D53C", "u1D53D", "u1D53E", "u1D540", "u1D541", "u1D542", "u1D543", "u1D544", "uni2115", "u1D546", "u1D547", "u1D54A", "u1D54B", "u1D54C", "u1D54D", "u1D54E", "u1D54F", "u1D550"]
+dblsc = [ "u1D53E", "u1D546", "u1D54A"]
+
+smallcaps = [ "agrave.sc", "aacute.sc", "acircumflex.sc", "atilde.sc", "adieresis.sc", "aring.sc", "ae.sc", "ccedilla.sc", "egrave.sc", "eacute.sc", "ecircumflex.sc", "edieresis.sc", "igrave.sc", "iacute.sc", "icircumflex.sc", "idieresis.sc", "eth.sc", "ntilde.sc", "ograve.sc", "oacute.sc", "ocircumflex.sc", "otilde.sc", "odieresis.sc", "oslash.sc", "ugrave.sc", "uacute.sc", "ucircumflex.sc", "udieresis.sc", "yacute.sc", "thorn.sc", "abreve.sc", "aogonek.sc", "cacute.sc", "ccaron.sc", "dcaron.sc", "dcroat.sc", "eogonek.sc", "ecaron.sc", "gbreve.sc", "idotaccent.sc", "ij.sc", "lacute.sc", "lcaron.sc", "lslash.sc", "nacute.sc", "ncaron.sc", "eng.sc", "ohungarumlaut.sc", "racute.sc", "rcaron.sc", "sacute.sc", "scedilla.sc", "scaron.sc", "tcedilla.sc", "tcaron.sc", "tbar.sc", "uring.sc", "uhungarumlaut.sc", "ydieresis.sc", "zacute.sc", "zdotaccent.sc", "zcaron.sc", "scommaaccent.sc", "tcommaaccent.sc", "germandbls.sc", "guilsinglleft.sc", "guilsinglright.sc", "adieresis.sc" ]
+
+uni_anchor = {}
+
+
+def fixanchpos(glyph, ycond, x, y):
+	tn = list(font[glyph].anchorPoints)
+	for j in range(0, len(tn)):
+		if tn[j][3] > ycond:
+			tn2 = list(tn[j])
+			tn2[2] = tn2[2] + x
+			tn2[3] = tn2[3] + y
+			tn[j] = tuple(tn2)
+	font[glyph].anchorPoints = tuple(tn)
+
+# add new glyphs
+
+if params[1].find(LIBERTINE_R) > -1:
+	# fix combining diacritics for superior
+	for i in ["a", "c", "e", "g", "m", "n", "o", "p", "q", "r", "s", "u", "v", "w", "x", "y", "z"]:
+		t = list(font[i + ".superior"].anchorPoints[0])
+		t[3] = t[3] - 30
+		font[i + ".superior"].anchorPoints = (tuple(t),)
+	# h.superior
+	t[2] = t[2] + 50
+	font["h.superior"].anchorPoints = (tuple(t),)
+	for i in range(ord("A"), ord("Z")) + [ord("Z")]:
+		font.selection.select(chr(i))
+		font.copy()
+		font.selection.select(0xE162 + i - ord("A"))
+		font.paste()
+		g = font[0xE162 + i - ord("A")]
+		g.transform(psMat.scale(0.65, 0.6))
+		g.transform(psMat.translate(0, font.em*0.366))
+		# fix top anchor positions
+		tn = list(font[0xE162 + i - ord("A")].anchorPoints)
+		for j in range(0, len(tn)):
+			if tn[j][3] == 876.0:
+				tn2 = list(tn[j])
+				tn2[3] = 846.0
+				tn[j] = tuple(tn2)
+			if i == ord("I"): # I
+				tn2 = list(tn[j])
+				tn2[2] = tn2[2] + 14
+				tn[j] = tuple(tn2)
+			if i == ord("Z"): # I
+				tn2 = list(tn[j])
+				tn2[2] = tn2[2] - 25
+				tn[j] = tuple(tn2)
+		font[0xE162 + i - ord("A")].anchorPoints = tuple(tn)
+	font["l.superior"].anchorPoints = font["a.superior"].anchorPoints
+	t = list(font["l.superior"].anchorPoints[0])
+	t[2] = t[2] - 50
+	t[3] = t[3] + 70
+	font["l.superior"].anchorPoints = (tuple(t),)
+	t = list(font["uniE162"].anchorPoints[0])
+	t[2] = t[2] - 85
+	font["t.superior"].anchorPoints = (tuple(t),)
+	t[2] = t[2] + 10
+	font["s.superior"].anchorPoints = (font["s.superior"].anchorPoints[0], tuple(t))
+	for i in [["a.superior", 0x1D49, "e.superior"], [0xE0DB, 0xE0D9, "dieresis.sups"], [0xE0DB, 0xE0DA, "hungarumlaut.sups"], ["a.superior", 0xE17D, "dotlessi.superior"], ["a.superior", 0xE1C5, "dotlessj.superior"], ["a.superior", 0xE17C, "germandbls.superior"], [0xE0DB, 0xE0D1, "breve.sups"], [0xE0DB, 0xE0D2, "dotaccent.sups"], [0xE0DB, 0xE0D3, "ring.sups"], [0xE0DB, 0xE0D4, "caron.sups"], [0xE0DB, 0xE0D5, "uniE0D5"], [0xE0DB, 0xE0D6, "uniE0D6"], [0xE0DB, 0xE0D7, "uniE0D7"], [0xE0DB, 0xE0D8, "uniE0D8"]]:
+		font.selection.select(i[0])
+		font.copy()
+		font.selection.select(i[1])
+		font.paste()
+		font[i[1]].glyphname = i[2]
+	for i in ["uni0308", 0xE0D9, "dieresis.sups"], ["uni030B", 0xE0DA, "hungarumlaut.sups"], ["brevecomb", 0xE0D1, "breve.sups"], ["uni0307", 0xE0D2, "dotaccent.sups"], ["uni030A", 0xE0D3, "ring.sups"], ["uni030C", 0xE0D4, "caron.sups"], ["grave.cap", 0xE0D5, "uniE0D5"], ["acute.cap", 0xE0D6, "uniE0D6"], ["dieresis.cap", 0xE0D7, "uniE0D7"], ["hungarumlaut.cap", 0xE0D8, "uniE0D8"], ["uni0326", 0xE0CD, "comma.sups"], ["uni0327", 0xE0CE, "cedilla.sups"], ["uni0328", 0xE0CF, "ogonek.sups"]:
+		font.selection.select(i[0])
+		font.copy()
+		font.selection.select(i[1])
+		font.paste()
+		font[i[1]].glyphname = i[2]
+		g = font[i[1]]
+		g.transform(psMat.scale(0.65, 0.65))
+		g.transform(psMat.translate(0, font.em*0.366))
+	# fix dotlessi.superior and dotlessj.superior
+	t = list(font["dotlessi.superior"].anchorPoints[0])
+	t[2] = 100
+	font["dotlessi.superior"].anchorPoints = (tuple(t),)
+	t = list(font["dotlessj.superior"].anchorPoints[0])
+	t[2] = 110
+	font["dotlessj.superior"].anchorPoints = (tuple(t),)
+	# fix a.scalt
+	t = list(font["a"].anchorPoints[3])
+	t[2] = t[2] + 40
+	t[3] = t[3]
+	font["a.scalt"].anchorPoints = (tuple(t),)
+	# add anchor points for other letters
+
+# fix Bold anchor positions of cap diacritics
+if "LinLibertine_RB." in params[1]:
+	for i in range(0xE358, 0xE35B):
+		fixanchpos(i, 0, 0, 150)
+	for i in range(0xE35B, 0xE35D):
+		fixanchpos(i, 0, 0, 180)
+	fixanchpos(0xE35F, 0, 0, 170)
+	fixanchpos(0xE362, 0, 0, 40)
+	fixanchpos(0xE363, 0, 0, 140)
+	fixanchpos(0xE364, 0, 0, 170)
+
+if "LinLib" in params[1] and not "DR" in params[1]:
+	# add anchor points to the small caps
+	for i in range(ord("a"), ord("z")) + [ord("z")]:
+		tn = list(font[chr(i).upper()].anchorPoints)
+		for j in range(0, len(tn)):
+			tn2 = list(tn[j])
+			if i != ord("i"):
+				tn2[2] = int(tn2[2] * (font[chr(i) + ".sc"].width * 1.0 / font[chr(i).upper()].width))
+			if tn[j][3] > 800.0:
+				tn2[3] = tn2[3] - 205
+			tn[j] = tuple(tn2)
+		font[chr(i) + ".sc"].anchorPoints = tuple(tn)
+	for i in[["Adieresis", "Adieresis.alt"], ["Odieresis", "Odieresis.alt"], ["Udieresis", "Udieresis.alt"], ["oacute", "ohungarumlaut"], ["uacute", "uhungarumlaut"], ["Oacute", "Ohungarumlaut"], ["Uacute", "Uhungarumlaut"]]:
+		font[i[1]].anchorPoints = font[i[0]].anchorPoints
+	for i in smallcaps:
+		if "a" <= i[0] <= "z":
+			if LIBERTINE_R in params[1] or not i in ["tcommaaccent.sc", "tcedilla.sc"]:
+				#font[i].anchorPoints = font[i[0] + ".sc"].anchorPoints 
+				tn = list(font[i[0] + ".sc"].anchorPoints)
+				for j in range(0, len(tn)):
+					tn2 = list(tn[j])
+					if tn2[3] > 500 and i[1:].replace(".sc", "") in ["grave", "acute", "circumflex", "tilde", "dieresis", "ring", "breve", "caron", "dotaccent", "hungarumlaut"]:
+						tn2[3] = tn2[3] + 205
+					tn[j] = tuple(tn2)
+				if i in font:
+					font[i].anchorPoints = tuple(tn)
+	font["Lslash"].anchorPoints = font["L"].anchorPoints
+	font["lslash"].anchorPoints = font["l"].anchorPoints
+if Libertine_It: # add anchor points to the capital diacritics:
+	for i in [["gravecomb", "grave.cap"], ["acutecomb", "acute.cap"], ["uni0302", "circumflex.cap"], ["uni030C", "caron.cap"], ["uni0306", "breve.cap"], ["uni030B", "hungarumlaut.cap"], ["uni0308", "dieresis.cap"]]:
+		font[i[1]].anchorPoints = font[i[0]].anchorPoints
+
+diacritics = {}
+diacritics2 = {}
+scdiacritics = {}
+scdiacritics2 = {}
+#combiningdiacritics = { "grave": "gravecomb", "acute": "acutecomb", "circumflex": "circumflexcomb", "tilde": "tildecomb", "dieresis": "uni0308", "macron": "macroncomb", "hungarumlaut": "uni030B", "caron": "uni030C", "ring": "uni030A", "dotaccent": "uni0307", "breve": "brevecomb", "commaaccent": "uni0326", "cedilla": "uni0327", "ogonek": "uni0328"}
+combiningdiacritics = { "grave": "0x0300", "acute": "0x0301", "circumflex": "0x0302", "tilde": "0x0303", "dieresis": "0x0308", "macron": "0x0304", "hungarumlaut": "0x030B", "caron": "0x030C", "ring": "0x030A", "dotaccent": "0x0307", "breve": "0x0306", "commaaccent": "0x0326", "cedilla": "0x0327", "ogonek": "0x0328"}
+
+
+for i in font.glyphs():
+	a =  i.getPosSub("*")
+	glyphs_uni = glyphs_uni | set([unicode(i.glyphname), u"uni" + hex(i.unicode).upper().replace("X","0")[-4:]])
+
+	if extended and "LinLib" in params[1] and i.glyphname[1:] in ["grave", "acute", "circumflex", "tilde", "dieresis", "dieresis.alt", "macron", "hungarumlaut", "caron", "ring", "dotaccent", "breve", "commaaccent", "cedilla", "ogonek"] and not i.glyphname in ["dcaron", "lcaron", "Lcaron", "tcaron"]:
+		if not i.glyphname[1:] in diacritics:
+			diacritics[i.glyphname[1:]] = []
+			diacritics2[i.glyphname[1:]] = []
+		diacritics[i.glyphname[1:]].append(i.glyphname)
+		diacritics2[i.glyphname[1:]].append(i.glyphname[0].replace("i", "dotlessi").replace("j", "dotlessj"))
+		if i.glyphname[0] == i.glyphname[0].lower() and not i.glyphname + ".sc" in smallcaps:
+			if not i.glyphname[1:] in scdiacritics:
+				scdiacritics[i.glyphname[1:]] = []
+				scdiacritics2[i.glyphname[1:]] = []
+			scdiacritics[i.glyphname[1:]].append(i.glyphname)
+			scdiacritics2[i.glyphname[1:]].append(i.glyphname[0] + ".sc")
+
+#	if i.glyphname=="colon":
+#		print set([unicode(i.glyphname), u"uni" + hex(i.unicode).upper().replace("X","0")[-4:]])
+	# double-stroke capitalis
+	if i.glyphname in dblsb and not "LinLibertine_DR" in params[1]:
+		i.anchorPoints = font[dblsa[dblsb.index(i.glyphname)]].anchorPoints
+	if len(i.anchorPoints) > 0 and not i.glyphname in uni_anchor:
+		uni_anchor[i.glyphname] = 1
+		ancdef = "anchor" + i.glyphname.replace(".","").replace("_","") + " = p(\"" + i.glyphname + "\") {"
+		for j in i.anchorPoints:
+			anam = j[0].replace("-","") + "" + j[1]
+			corx = cory = 0
+			if i.glyphname in dblsb:
+				corx = 50
+				if i.glyphname in dblsc:
+					corx = 20
+				cory = -30
+			ancdef += anam + "= point("+ str(int(j[2]) + corx) + "m," + str(int(j[3]) + cory) +"m);"
+			if extended and i.unicode < 123 and anam == "Anchor6base": # add missing unten_punkt mark to Linux Libertine G
+				fixmark[i.glyphname] = anam + "= point("+ str(int(j[2])) + "m," + str(int(j[3])) +"m);"
+			if (j[1] == "mark"):
+				anchormark += [anam]
+			if not anam in anchorbasechar:
+				anchorbasechar[anam] = []
+			anchorbasechar[anam] += [i.glyphname]
+		if extended and "LinLib" in params[1] and i.unicode > 123 and i.glyphname[1:] in ["grave", "acute", "circumflex", "tilde", "dieresis", "dieresis.alt", "ring", "macron", "dotaccent", "breve", "hungarumlaut", "commaaccent", "cedilla", "ogonek"] and not "Anchor6base" in ancdef and i.glyphname[0] in fixmark:
+			ancdef += fixmark[i.glyphname[0]]
+			anchorbasechar["Anchor6base"] += [i.glyphname]
+		anchorbase += [ancdef + "};"] 
+	if len(a) > 0:
+		for j in a:
+			lookup_glyph(i.glyphname, j)
+	if i.glyphname == "dotlessi":
+		dotlessi = True
+	if i.glyphname == "f.short":
+		f_corr = "f_corr = p(\"f.short\");"
+	if i.glyphname == "f_f.short":
+		ff_corr = "ff_corr = p(\"f_f.short\");"
+	if i.glyphname == "Q_u.sc":
+		Qu_sc = True
+	if i.glyphname == "Germandbls.alt":
+		Germandbls_alt = True
+	if i.glyphname == "f_f_j" or i.unicode == 57395:
+		f_f_j = True
+	if i.glyphname == "onefifth":
+		onefifth = True
+	if i.glyphname[:3] == "uni":
+		glyphs_uni = glyphs_uni | set([i.glyphname.replace("uni","0x").lower()])
+	try:
+		uni = fontforge.unicodeFromName(i.glyphname)
+		glyphs_uni = glyphs_uni | set([hex(uni)])
+		if re.match("[L].*", unicodedata.category(unichr(uni))):
+			letters = letters | set([i.glyphname])
+	except:
+		if re.sub("[.]alt$", "", i.glyphname) in letters: # add J.alt, etc. glyphs to letters
+			letters = letters | set([i.glyphname])
+	if re.sub("[.].*", "", i.glyphname) in ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]:
+			numbers = numbers | set([i.glyphname])
+
+def get_languages(lookupinfo):
+	l = []
+	for i in str(lookupinfo).split("'"):
+		if re.match("[A-Z]{3} ", i) or i == "dflt":
+			l.append(i)
+	return set(l)
+
+languages = set()	# all OpenType language codes used by the font
+for i in font.gsub_lookups:
+	languages = languages | get_languages(font.getLookupInfo(i))
+
+# printing GDL source
+
+print >>out, "#include \"stddef.gdh\""
+print >>out, "#define p postscript"
+print >>out, "#define u unicode"
+print >>out, "#define u_itlc user8"
+print >>out, "#define u_2itlc user9"
+print >>out, "#define u_frsp user10"
+print >>out, "#define nbl user11"
+print >>out, "#define nbr user12"
+print >>out, "#define u_hang user13"
+print >>out, "#define u_exclam user14"
+print >>out, "#define u_dotted user15"
+print >>out, "#define LG_HU 0x040d"
+print >>out, "table(feature)"
+feat = []
+
+def feathelp(feat):
+	if not (re.match("ss[0-2][0-9]", feat[1:5]) or (feat[1:3] == "sa" and feat[4] > "0" and feat[4] <= "9")):
+		return ""
+	f = []
+	s = []
+	if feat in lookups:
+		f = lookups[feat][0]
+	elif feat in lookupl:
+		f = lookupl[feat][0]
+	for j in f:	
+		s.append(j)
+#		if fontforge.unicodeFromName(j) > -1:
+#			s.append(unichr(fontforge.unicodeFromName(j)))
+	if len(s) > 0:
+		if len(s) > 3:
+			s[3] = u"…"
+			s[3] = "..."
+			s = s[:4]
+		return " (" + string.join(s, ", ") + ")"
+	return ""
+
+
+LinDia = "" # Default ss01 table of Linux Libertine for German ÖÜÄ
+SMCPfix = "" # short fix for ligatures with small caps
+
+for i in sorted(lookups.keys() + lookupl.keys()):
+	l = i[1:5]
+	if l == "ss01" and font.fullname.find("Linux ") > -1: 
+		LinDia = "ss01 = 0;"
+	if l == "liga":
+		for j in lookupl[i][0]:
+			letters = letters | set([j])
+	if  l[1:4] == "ss0":
+		letters = letters | set(lookups[i][1])
+	if l == "smcp":
+		letters = letters | set(lookups[i][1])
+		SMCPfix = " && !smcp && !sups"
+	if not l in feat:
+
+		if l == "liga" or (l == "ss01" and font.fullname.find("Linux ") > -1): # German umlaut variants are default only for German
+			print >>out, l + " { id = \"" + l + "\"; default = 1; name.LG_USENG = \"" + re.sub(" lookup.*$", "", i) + feathelp(i) + "\"}"
+		elif l == "frac" and extended:
+			print >>out, """frac { id = "frac"; name.LG_USENG="'frac' Diagonal and nut Fractions"; settings { 
+	none { value = 0; name.LG_USENG = "None"; }
+	diagonal { value = 1; name.LG_USENG = "Diagonal fractions"; }
+	nut { value = 2;  name.LG_USENG = "Nut fractions"; }
+}}"""
+		else:
+			print >>out, l + " { id = \"" + l + "\"; name.LG_USENG = \"" + re.sub(" lookup.*$", "", i) + feathelp(i) + "\"}"
+		feat.append(l)
+
+if len(cpsp) > 0:
+	print >>out, "cpsp { id = \"cpsp\"; name.LG_USENG=\"'cpsp' Capital spacing\"; }"
+
+if extended:
+	print >>out, "lith { id = \"lith\"; default = 1; name.LG_USENG=\"'lith' Th ligature\"; }"
+	print >>out, "litt { id = \"litt\"; default = 1; name.LG_USENG=\"'litt' tt ligature\"; }"
+
+# add ss01 for Linux Libertine Semibold Italic
+if (params[1].find("RZI") > -1):
+	print >>out, "ss01 { id = \"ss01\"; default = 1; name.LG_USENG = \"'ss01' Style Set 1 (Adieresis, Odieresis, Udieresis)\"}"
+
+if (params[1].find("Libertine_DR") > -1):
+	print >>out, "smcp { id = \"smcp\"; default = 1; name.LG_USENG = \"'smcp' (not working)\"}" 
+	print >>out, "ss02 { id = \"ss02\"; default = 0; name.LG_USENG = \"'ss02' Style Set 2 (R)\"}"
+
+if "Libertine_RI" in params[1] or "Libertine_RZI" in params[1] or "Libertine_RBI" in params[1]:
+	print >>out, """itlc { id = \"itlc\"; name.LG_USENG=\"'itlc' Italic correction\"; settings { 
+	none { value = 0; name.LG_USENG = "None"; }
+	normal { value = 1; name.LG_USENG = "Left: with space; right: always"; }
+	space { value = 2;  name.LG_USENG = "Left and right: with space (for multi-line italic text)"; }
+}}
+para { id = \"para\"; name.LG_USENG = \"'para' non-italic parenthesis alternative\"}"""
+
+print >>out, gdldef.feat
+
+if extended:
+	print >>out, gdldef.feat_linlib
+	# add smcp for Linux Libertine Bold Italic
+	if (params[1].find("ZI") > -1):
+		print >>out, gdldef.feat_linlibBI
+
+print >>out, "endtable;"
+
+
+print >>out, "table(language)"
+for i in lang:
+	if i == "DEU " and font.fullname.find("Linux ") > -1: # German umlaut variants are default only for German
+		print >>out, i, "{ languages = (\"" + lang[i] + "\");", LinDia, " lng = ", i, " }"
+	elif i == "HUN " or i == "FRA ": # French spacing before "!", "?", ";" and ":"
+		print >>out, i, "{ languages = (\"" + lang[i] + "\"); frsp = 1; lng = ", i, " }"
+	elif i != "dflt":
+		print >>out, i, "{ languages = (\"" + lang[i] + "\"); lng = ", i, " }"
+print >>out, "endtable;"
+
+print >>out, "table(glyph)"
+for i in anchorbasechar:
+	print >>out, "g" + i, "= p", str(tuple(anchorbasechar[i])).replace("'", "\"").replace(",)", ")"), ";"
+
+for i in anchorbase:
+	print >>out, i
+print >>out, gdldef.glyph
+print >>out, f_corr
+print >>out, ff_corr
+cnum = []
+cnum1 = []
+cnum5 = []
+for i in lookups:
+	l = re.sub("[^a-zA-Z0-9]", "_", i)
+	# fix hyphen superior in Linux Libertine Regular
+	if LIBERTINE_R in params[1] and "minus.superior" in lookups[i][1]:
+		lookups[i][1][lookups[i][1].index("minus.superior")] = "hyphen.sups"
+	# extra combining diacritics for sups  (XXX)
+	if "acutecomb.sups" in lookups[i][1]:
+		lookups[i][0].append("uni0308")
+		lookups[i][1].append("dieresis.sups")
+		lookups[i][0].append("uni030B")
+		lookups[i][1].append("hungarumlaut.sups")
+		lookups[i][0].append("dotlessi")
+		lookups[i][1].append("dotlessi.superior")
+		lookups[i][0].append("dotlessj")
+		lookups[i][1].append("dotlessj.superior")
+		lookups[i][0].append("germandbls")
+		lookups[i][1].append("germandbls.superior")
+		lookups[i][0].append("uni0307")
+		lookups[i][1].append("dotaccent.sups")
+		lookups[i][0].append("uni030A")
+		lookups[i][1].append("ring.sups")
+		lookups[i][0].append("uni030C")
+		lookups[i][1].append("caron.sups")
+		lookups[i][0].append("grave.cap")
+		lookups[i][1].append("uniE0D5")
+		lookups[i][0].append("acute.cap")
+		lookups[i][1].append("uniE0D6")
+		lookups[i][0].append("dieresis.cap")
+		lookups[i][1].append("uniE0D7")
+		lookups[i][0].append("hungarumlaut.cap")
+		lookups[i][1].append("uniE0D8")
+		lookups[i][0].append("brevecomb")
+		lookups[i][1].append("breve.sups")
+		lookups[i][0].append("uni0326")
+		lookups[i][1].append("comma.sups")
+		lookups[i][0].append("uni0327")
+		lookups[i][1].append("cedilla.sups")
+		lookups[i][0].append("uni0328")
+		lookups[i][1].append("ogonek.sups")
+	# removing slash from sups table
+	if i[1:5] == "sups" and "slash" in lookups[i][0]: # and "six.oldstyle" in lookups[i][1]:
+		lookups[i][0].remove("slash")
+		lookups[i][1].remove("fraction")
+	# fix for missing dotless i
+	if dotlessi and i[1:5] == "smcp" and not "dotlessi" in lookups[i][0]:
+		lookups[i][0].append("dotlessi")
+		lookups[i][1].append("i.sc")
+	# fix old style proportional numbers after Euro
+	if i[1:5] == "onum" and "Euro.fitted" in lookups[i][0]:
+		lookups[i][0].remove("Euro.fitted")
+		lookups[i][1].remove("Euro")
+	# fix for Linux Libertine (bad old-style conversion in Bold Italic):
+	if i[1:5] == "onum" and not "six.oldstyle" in lookups[i][1]:
+		lookups[i][1][lookups[i][0].index("six")] = "six.oldstyle"
+		lookups[i][1][lookups[i][0].index("seven")] = "seven.oldstyle"
+		lookups[i][1][lookups[i][0].index("eight")] = "eight.oldstyle"
+		lookups[i][1][lookups[i][0].index("nine")] = "nine.oldstyle"
+		lookups[i] = (tuple(list(lookups[i][0]) + ["zero.slashfitted", "zero.fitted", "one.fitted", "two.fitted", "three.fitted", "four.fitted", "five.fitted", "six.fitted", "seven.fitted", "eight.fitted", "nine.fitted"]), lookups[i][1])
+		lookups[i] = (lookups[i][0], tuple(list(lookups[i][1]) + ["zero.oldstyle", "zero.oldstyle", "one.oldstyle", "two.oldstyle", "three.oldstyle", "four.oldstyle", "five.oldstyle", "six.oldstyle", "seven.oldstyle", "eight.oldstyle", "nine.oldstyle"]))
+	# fix for Linux Libertine (digit 8 in pnum, correct data needs for the feature "arti"):
+	if i[1:5] == "pnum" and "zero.taboldstyle" in lookups[i][0] and "eight.oldstyle" in lookups[i][0]:
+		idx = lookups[i][0].index("eight.oldstyle")
+		lookups[i][0][idx] = "eight.taboldstyle"
+		lookups[i][1][idx] = "eight.oldstyle"
+
+
+	print >>out, "class_" + l + "_1 = p", str(tuple(lookups[i][0])).replace("'", "\"").replace(",)", ")"), ";"
+	print >>out, "class_" + l + "_2 = p", str(tuple(lookups[i][1])).replace("'", "\"").replace(",)", ")"), ";"
+	if i[1:5] == "sups":
+		print >>out, "cidx2 = class_" + l + "_2;"
+	if i[1:5] == "sinf":
+		print >>out, "cidx3 = class_" + l + "_2;"
+	if i[1:5] == "onum" or i[1:5] == "pnum" or i[1:5] == "zero": # all numerical glyphs
+		cnum.append("class_" + l + "_2")
+		try:
+			cnum1.append(lookups[i][1][lookups[i][0].index("one")])
+			cnum5.append(lookups[i][1][lookups[i][0].index("five")])
+			cnum1.append(lookups[i][1][lookups[i][0].index("one.fitted")])
+			cnum5.append(lookups[i][1][lookups[i][0].index("five.fitted")])		
+		except:
+			pass
+
+if len(cnum): 
+	print >>out, "add = (dd, " + string.join(cnum, ",") + ");".replace(",\" )", ")")
+	print >>out, "ad1 = p(\"one\", \"" + string.join(cnum1, "\", \"") + "\");".replace(",\" )", ")")
+	print >>out, "ad5 = p(\"five\", \"" + string.join(cnum5, "\", \"") + "\");".replace(",\" )", ")")
+else:
+	print >>out, "add = (dd)";
+	print >>out, "ad1 = p(\"one\")"
+	print >>out, "ad5 = p(\"five\")"
+print >>out, "numbers = p(\"" + string.join(numbers, "\", \"") + "\");"
+print >>out, "letters = p(\"" + string.join(letters, "\", \"") + "\");"
+print >>out, """
+csc123 = letters;
+csc123lig = letters;
+csc123ligd = (letters, u(0x002D));
+csc123ligdash = (letters, u(0x002D));
+csc123liga = (csc123ligd, u(0x0020));
+"""
+if "uni2731" in glyphs_uni or extended:
+	print >>out, "asterisk = u(0x2731);" 
+else:
+	print >>out, "asterisk = p(\"asterisk\");" 
+if "dagger" in glyphs_uni:
+	print >>out, "dagger = u(0x2020);" 
+else:
+	print >>out, "dagger = u(0x002B);" 
+if "daggerdbl" in glyphs_uni:
+	print >>out, "daggerdbl = u(0x2021);" 
+else:
+	print >>out, "daggerdbl = u(0x0023);" 
+
+for i in kern_classes:
+	a = str(i).replace("'", "\"").replace(",)", ")").replace(", <NULL>", "")
+	#if Libertine_It kerning extended for ligature fj, ffj, gj, gy and ij
+	if Libertine_It and ((a.find("kernl") > -1 and a.find("\"j\"") > -1) or (a.find("kernr") > -1 and a.find("\"i\"") > -1)):
+		a = a.replace(")", ", \"uni0133\")")
+	if (Libertine_It or "Libertine_RBI" in params[1] or "Libertine_RZI" in params[1]) and (("kernl" in a and "\"y\"" in a) or ("kernr" in a and "\"g\"" in a)):
+		a = a.replace(")", ", \"g_y\")")
+	if ("Libertine_RBI" in params[1] or "Libertine_RB." in params[1] or "Libertine_RZ" in params[1]) and "kernr" in a:
+		if "\"a\"" in a:
+			a = a.replace(")", ", \"aacute\")")
+		if "\"e\"" in a:
+			a = a.replace(")", ", \"eacute\")")
+		if "\"o\"" in a:
+			a = a.replace(")", ", \"oacute\", \"odieresis\", \"ohungarumlaut\")")
+		if "\"u\"" in a:
+			a = a.replace(")", ", \"uacute\", \"udieresis\", \"uhungarumlaut\")")		
+	if "Libertine_RBI" in params[1] and (("kernl" in a and "\"i\"" in a) or ("kernr" in a and "\"f\"" in a)):
+		a = a.replace(")", ", \"f_f_i\")")
+	if (Libertine_It or "Libertine_RB." in params[1]) and a.find("kernl") > -1 and a.find("\"j\"") > -1:
+		a = a.replace(")", ", \"j.hort\")")
+	if (Libertine_It or "Libertine_DR." in params[1]) and (a.find("kernr") > -1 and a.find("\"f\"") > -1):
+		a = a.replace(")", ", \"f_f_j\", \"f_j\")")  # XXX f_j is missing from OpenType kerning table of Linux Libertine
+	# temporary fix zero kerning classes (eg. in Linux Libertine Display Regular) using ASCII quotedbl
+	if a.find("p()") > -1:
+		a = a.replace("p()", "p(\"quotedbl\")")
+	# add kerning for double-stroke capitals
+	if params[1].find(LIBERTINE_R) > -1 and re.search("\"[A-Z]\"", a):	
+		for i in dblsa:
+			if a.find("\"" + i + "\"") > -1:
+				a = a.replace(")", ", \"" + dblsb[dblsa.index(i)] + "\")") 
+	print >>out, a
+
+for i in cpsp:
+	print >>out, i, "= p(\"" + string.join(cpsp[i], "\", \"") + "\");"
+if len(cpsp) > 0:
+	print >>out, "cpsp_all = (", string.join(cpsp.keys(), ",") + ");"
+
+if extended:
+	# correction for Linux Libertine Bold Italic small caps
+	print >>out, gdldef.glyph_linlib
+	if "Libertine_RI" in params[1]:
+		print >>out, """
+parleft = u(0xE102, 0xE104, 0xE106);
+parright = u(0xE103, 0xE105, 0xE107);
+csc1 = u(0xE02D, 0x0061.. 0x007A, 0x00E0.. 0x00F6, 0x0153, 0x00F8.. 0x00FF, 0x0133, 0x00DF, 0x0111, 0x0103, 0x0105, 0x0107, 0x010D, 0x010F, 0x0119, 0x011B, 0x011F, 0x013A, 0x0142, 0x0144, 0x0148, 0x014B, 0x0151, 0x0155, 0x0159, 0x015B, 0x015F, 0x0161, 0x0163, 0x0167, 0x016F, 0x0171, 0x017A, 0x017C, 0x017E, 0x013E, 0x0165, 0x021B, 0x0219, 0xE0E0); 
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE363)
+""" 
+	elif "Libertine_RBI" in params[1]:
+		print >>out, """
+parleft = u(0xE102, 0xE104, 0xE106);
+parright = u(0xE103, 0xE105, 0xE107);
+csc1 = u(0xE02D, 0x0061.. 0x007A, 0x00E0.. 0x00F6, 0x0153, 0x00F8.. 0x00FF, 0x0133, 0x00DF, 0x0111, 0x0103, 0x0105, 0x0107, 0x010D, 0x010F, 0x0119, 0x011B, 0x011F, 0x013A, 0x0142, 0x0144, 0x0148, 0x014B, 0x0151, 0x0155, 0x0159, 0x015B, 0x015F, 0x0161, 0x0163, 0x0167, 0x016F, 0x0171, 0x017A, 0x017C, 0x017E, 0x013E, 0x0165, 0x021B, 0x0219); 
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE363)
+"""
+	elif "Biolinum_RI" in params[1]:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_l", "f_f_l", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x0331)
+"""
+	elif "Biolinum" in params[1]:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_l", "f_f_l", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE364)
+"""
+	elif "Libertine_RB" in params[1]:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_j", "uniE033", "f_l", "f_f_l", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE364)
+"""
+	elif "Libertine_RZ." in params[1]:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_j", "uniE033", "f_l", "f_f_l", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x0331)
+"""
+	elif "Libertine_RZI" in params[1]:
+		print >>out, """
+parleft = u(0xE102, 0xE104, 0xE106);
+parright = u(0xE103, 0xE105, 0xE107);
+diaComb = u(0x0300 .. 0x0331)
+"""
+	elif "Libertine_DR" in params[1]:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_j", "uniE033", "f_l", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE364)
+"""
+	else:
+		print >>out, """
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_j", "f_f_j", "f_l", "f_f_l", "f.short", "j");
+fkernj = (fkern, p("j"));
+diaComb = u(0x0300 .. 0x034E, 0x0350 .. 0x036F, 0xE358 .. 0xE364)
+"""
+	if (params[1].find("RZI") > -1):
+		print >>out, """
+csc1 = u(0xE02D, 0x0061.. 0x007A, 0x00E0.. 0x00F6, 0x0153, 0x00F8.. 0x00FF, 0x0133, 0x00DF, 0x0111, 0x0103, 0x0105, 0x0107, 0x010D, 0x010F, 0x0119, 0x011B, 0x011F, 0x013A, 0x0142, 0x0144, 0x0148, 0x014B, 0x0151, 0x0155, 0x0159, 0x015B, 0x015F, 0x0161, 0x0163, 0x0167, 0x016F, 0x0171, 0x017A, 0x017C, 0x017E, 0x013E, 0x0165, 0x021B, 0x0219); 
+
+csc2 = u(0xE06D, 0xE051.. 0xE06A, 0xE070.. 0xE091, 0xE097..0xE0B3, 0x021B, 0x0219);
+csc3 = u(0xE02D, 0x0041.. 0x005A, 0x00C0.. 0x00D6, 0x0152, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x00DD, 0x00DE, 0x0178, 0x0132, 0x0053, 0x0110, 0x0102, 0x0104, 0x0106, 0x010C, 0x010E, 0x0118, 0x011A, 0x011E, 0x0139, 0x0141, 0x0143, 0x0147, 0x014A, 0x0150, 0x0154, 0x0158, 0x015A, 0x015E, 0x0160, 0x0162, 0x0166, 0x016E, 0x0170, 0x0179, 0x017B, 0x017D, 0x013D, 0x0164, 0x021A, 0x0218);
+ffkern = p("f", "f_f"); 
+fkern = p("f", "f_f", "f_i", "f_f_i", "uniE037", "uniE033");
+fkernj = (fkern, p("j"));
+paraflkern = p("d", "l", "U", "Uacute", "Udieresis", "Udieresis.alt", "Uhungarumlaut", "V", "W", "exclam", "question");
+"""
+	elif "Libertine_RI" in params[1]:
+		print >>out, """
+csc2 = u(0xE06D, 0xE051.. 0xE06A, 0xE070.. 0xE091, 0xE097..0xE0B5, 0xE056);
+csc3 = u(0xE02D, 0x0041.. 0x005A, 0x00C0.. 0x00D6, 0x0152, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x00DD, 0x00DE, 0x0178, 0x0132, 0x0053, 0x0110, 0x0102, 0x0104, 0x0106, 0x010C, 0x010E, 0x0118, 0x011A, 0x011E, 0x0139, 0x0141, 0x0143, 0x0147, 0x014A, 0x0150, 0x0154, 0x0158, 0x015A, 0x015E, 0x0160, 0x0162, 0x0166, 0x016E, 0x0170, 0x0179, 0x017B, 0x017D, 0x013D, 0x0164, 0x021A, 0x0218, 0x0046);
+ffkern = p("f", "f_f", "f.short", "f_f.short"); 
+fkern = p("f", "f_f", "f_i", "f_f_i", "f_j", "f_f_j", "f_l", "f_f_l", "f.short", "j");
+fkernj = (fkern, p("j"));
+paraflkern = p("d", "f_l", "f_f_l", "l", "U", "Uacute", "Udieresis", "Udieresis.alt", "Uhungarumlaut", "V", "W", "exclam", "question");
+"""
+	elif "Libertine_RBI" in params[1]:
+		print >>out, """
+csc2 = u(0xE06D, 0xE051.. 0xE06A, 0xE070.. 0xE091, 0xE097..0xE0B5);
+csc3 = u(0xE02D, 0x0041.. 0x005A, 0x00C0.. 0x00D6, 0x0152, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x00DD, 0x00DE, 0x0178, 0x0132, 0x0053, 0x0110, 0x0102, 0x0104, 0x0106, 0x010C, 0x010E, 0x0118, 0x011A, 0x011E, 0x0139, 0x0141, 0x0143, 0x0147, 0x014A, 0x0150, 0x0154, 0x0158, 0x015A, 0x015E, 0x0160, 0x0162, 0x0166, 0x016E, 0x0170, 0x0179, 0x017B, 0x017D, 0x013D, 0x0164, 0x021A, 0x0218);
+ffkern = p("f", "f_f"); 
+fkern = p("f", "f_f", "f_i", "f_f_i", "uniE033", "uniE037", "f.short", "j");
+fkernj = (fkern, p("j"));
+paraflkern = p("d", "l", "U", "Uacute", "Udieresis", "Udieresis.alt", "Uhungarumlaut", "V", "W", "exclam", "question");
+"""
+	elif "Libertine_DR" in params[1]:
+		print >>out, """
+csc1 = u(0xE02D, 0x0061.. 0x007A, 0x00E0.. 0x00F6, 0x0153, 0x00F8.. 0x00FF, 0x0133, 0x00DF, 0x0111, 0x0103, 0x0105, 0x0107, 0x010D, 0x010F, 0x0119, 0x011B, 0x011F, 0x013A, 0x0142, 0x0144, 0x0148, 0x014B, 0x0151, 0x0155, 0x0159, 0x015B, 0x015F, 0x0161, 0x0163, 0x0167, 0x016F, 0x0171, 0x017A, 0x017C, 0x017E, 0x013E, 0x0165, 0x021B, 0x0219); 
+csc2 = csc1;
+csc3 = u(0xE02D, 0x0041.. 0x005A, 0x00C0.. 0x00D6, 0x0152, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x00DD, 0x00DE, 0x0178, 0x0132, 0x0053, 0x0110, 0x0102, 0x0104, 0x0106, 0x010C, 0x010E, 0x0118, 0x011A, 0x011E, 0x0139, 0x0141, 0x0143, 0x0147, 0x014A, 0x0150, 0x0154, 0x0158, 0x015A, 0x015E, 0x0160, 0x0162, 0x0166, 0x016E, 0x0170, 0x0179, 0x017B, 0x017D, 0x013D, 0x0164, 0x021A, 0x0218);
+"""
+	else:
+		print >>out, """
+csc1 = u(0xE02D, 0x0061.. 0x007A, 0x00E0.. 0x00F6, 0x0153, 0x00F8.. 0x00FF, 0x0133, 0x00DF, 0x0111, 0x0103, 0x0105, 0x0107, 0x010D, 0x010F, 0x0119, 0x011B, 0x011F, 0x013A, 0x0142, 0x0144, 0x0148, 0x014B, 0x0151, 0x0155, 0x0159, 0x015B, 0x015F, 0x0161, 0x0163, 0x0167, 0x016F, 0x0171, 0x017A, 0x017C, 0x017E, 0x013E, 0x0165, 0x021B, 0x0219); 
+csc2 = u(0xE06D, 0xE051.. 0xE06A, 0xE070.. 0xE091, 0xE097..0xE0B5);
+csc3 = u(0xE02D, 0x0041.. 0x005A, 0x00C0.. 0x00D6, 0x0152, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x00DD, 0x00DE, 0x0178, 0x0132, 0x0053, 0x0110, 0x0102, 0x0104, 0x0106, 0x010C, 0x010E, 0x0118, 0x011A, 0x011E, 0x0139, 0x0141, 0x0143, 0x0147, 0x014A, 0x0150, 0x0154, 0x0158, 0x015A, 0x015E, 0x0160, 0x0162, 0x0166, 0x016E, 0x0170, 0x0179, 0x017B, 0x017D, 0x013D, 0x0164, 0x021A, 0x0218);
+"""
+	# double-stroke letters
+	if LIBERTINE_R in params[1]:
+		print >>out, """
+dblCap = u(0x0041..0x005A);
+dblCap2 = u(0x1D538, 0x1D539, 0x2102, 0x1D53B .. 0x1D53E, 0x210D, 0x1D540 .. 0x1D544, 0x2115, 0x1D546, 0x1D547, 0x211A, 0x211D, 0x1D54A .. 0x1D550, 0x2124);
+french_punct_sups = p("exclam.sups", "question.sups", "colon.sups", "semicolon.sups");
+leftpunct_sups = p("parenleft.superior", "sixperemspace");
+quots_sups = p("quotedblbase.sups", "quotedblleft.sups", "quotedblright.sups");
+letters_sups = (class__sups__Superscript_lookup_9_subtable_2, u(0xE162 .. 0xE187, 0xE0D5 .. 0xE0D8, 0xE18A .. 0xE194, 0xE1B4 .. 0xE1CD));
+supsIN = u(0x0041..0x005A, 0x00DF, 0x0131, 0x0021, 0x002C, 0x002E, 0x003A, 0x003B, 0x003F, 0x201C..0x201F, 0x002F, 0x005F, 0x00AB, 0x00BB, 0x2013, 0x2014, 0x0025, 0x0026, 0x2018..0x201A);
+supsOUT = u(0xE162 .. 0xE187, 0xE18A .. 0xE194);
+
+"""
+	elif "RZI" in params[1]:
+		print >>out, """
+ss01RZI = p("Adieresis", "Odieresis", "Udieresis");
+ss01RZI2 = p("Adieresis.alt", "Odieresis.alt", "Udieresis.alt");
+
+dblCap = p("C", "H", "N", "P", "R", "Z");
+dblCap2 = u(0x2102, 0x210D, 0x2115, 0x2119, 0x211D, 0x2124);
+
+supsIN = u(0x0041..0x005A);
+supsOUT = u(0xE162 .. 0xE17B);
+
+"""
+	else:
+		print >>out, """
+dblCap = p("C", "H", "N", "P", "Q", "R", "Z");
+dblCap2 = u(0x2102, 0x210D, 0x2115, 0x2119, 0x211A, 0x211D, 0x2124);
+"""
+		if not "LinLibertine_DR" in params[1] and not "Biolinum" in params[1]:
+			print >>out, """
+supsIN = u(0x0041..0x005A);
+supsOUT = u(0xE162 .. 0xE17B);
+"""
+	if extended and not "Libertine_DR" in params[1]:
+		for i in diacritics:
+			print >>out, "diac" + i.replace(".","") + "= p(\"" + string.join(diacritics[i], "\", \"") + "\");"
+			print >>out, "letter" + i.replace(".","") + "= p(\"" + string.join(diacritics2[i], "\", \"") + "\");"
+		for i in scdiacritics:
+			print >>out, "scdiac" + i.replace(".","") + "= p(\"" + string.join(scdiacritics[i], "\", \"") + "\");"
+			print >>out, "scletter" + i.replace(".","") + "= p(\"" + string.join(scdiacritics2[i], "\", \"") + "\");"
+
+print >>out, "endtable;"
+
+print >>out, "table(position)"
+
+#print >>out, "p(\"hyphen\") { shift.x = -500m };"
+
+print >>out, "pass(1);"
+
+unianchor = {}
+for i in anchormark:
+	if not i in unianchor:
+		unianchor[i] = 1
+		anam = i.replace("mark", "base")
+		if anam in anchorbasechar:
+			print >>out, "g" + anam + " g" + i + " {attach {to = @1; at = @1." + anam + "; with= @2." + i + " }};" 
+		anam = i.replace("mark", "basemark")
+		if anam in anchorbasechar:
+			print >>out, "g" + anam + " g" + i + " {attach {to = @1; at = @1." + anam + "; with= @2." + i + " }};" 
+print >>out, "endpass; pass(2);"
+unianchor = {}
+for i in anchormark:
+	if not i in unianchor:
+		unianchor[i] = 1
+		anam = i.replace("mark", "base")
+		if anam in anchorbasechar:
+			print >>out, "g" + anam + " diaComb g" + i + " {attach {to = @1; at = @1." + anam + "; with= @3." + i + " }};" 
+		anam = i.replace("mark", "basemark")
+		if anam in anchorbasechar:
+			print >>out, "g" + anam + " diaComb g" + i + " {attach {to = @1; at = @1." + anam + "; with= @3." + i + " }};" 
+print >>out, "endpass; pass(3);"
+
+if extended:
+	for i in cpsp:
+		print >>out, "if (cpsp || caps == 2)", i, "{ shift.x += 8m; advance.x += 20m; user2 = true } / ANY ^ _ { user2 == false }; endif;"
+		print >>out, "if (cpsp || caps == 2)", i, "{ shift.x += 8m; advance.x += 20m; user2 = true } / _ { user2 == false }; endif;"
+else:
+	for i in cpsp:
+		print >>out, "if (cpsp)", i, "{ shift.x += 8m; advance.x += 20m; user2 = true } / ANY ^ _ { user2 == false }; endif;"
+		print >>out, "if (cpsp)", i, "{ shift.x += 8m; advance.x += 20m; user2 = true } / _ { user2 == false }; endif;"
+
+
+print >>out, gdldef.kern
+if extended:
+	print >>out, gdldef.kern_linlib
+	if "Libertine_R." in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 47m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 47m; } / p("ellipsis") _;
+p("period") { kern.x = 47m; } / p("period") {u_dotted == 1} _;
+
+p("c.superior", "b.superior", "d.superior", "e.superior", "f.superior", "g.superior", "h.superior", "i.superior", "j.superior", "k.superior", "l.superior", "m.superior", "n.superior", "p.superior", "q.superior", "r.superior", "s.superior", "t.superior", "u.superior", "v.superior", "w.superior", "x.superior", "y.superior", "z.superior") { kern.x = -18m; }  / p("f.superior") [diaComb? diaComb]? _;
+p("a.superior", "e.superior", "o.superior") { kern.x = -25m; } / p("f.superior") [diaComb? diaComb]? _;
+p("e.superior") { kern.x = -18m; } / p("y.superior") [diaComb? diaComb]? _;
+p("a.superior", "e.superior", "o.superior", "uniE162") { kern.x = -45m; } / p("uniE177", "uniE178", "uniE17A") [diaComb? diaComb]? _;
+p("v.superior", "w.superior", "y.superior", "uniE177", "uniE178", "uniE17A") { kern.x = -45m; } / p("uniE162") [diaComb? diaComb]? _;
+if (lng==HUN) p("y.superior") { kern.x = -25m; } / p("g.superior", "n.superior") [diaComb? diaComb]? _; endif;
+
+// Catalan l.l
+
+p("dotaccent.sups") { shift.x = 75m; shift.y = -200m; } / p("l.superior") _ p("l.superior"); 
+p("l.superior") { kern.x = 30m; } / p("l.superior") p("dotaccent.sups") _; 
+p("dotaccent.sups") { shift.x = 2 * @1.bb.width / 3; adv.x = 0; shift.y = -220m; } / p("uniE16D") _ p("uniE16D"); 
+
+p("dotaccent") { kern.x = -125m; shift.y = -250m; } / p("l") _ p("l"); 
+p("l") { kern.x = -125m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -250m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -350m; } / p("l.sc") _ p("l.sc"); 
+
+// small cap + V A
+
+//p("a.sc", "a.scalt", "agrave.sc", "aacute.sc", "acircumflex.sc", "aring.sc", "atilde.sc", "adieresis.sc", "ae.sc", "abreve.sc", "aogonek.sc", "A") { kern.x = -100m; } / p("v.sc", "w.sc", "V", "W") [diaComb? diaComb]? _;
+//p("a.sc", "a.scalt", "agrave.sc", "aacute.sc", "acircumflex.sc", "aring.sc", "atilde.sc", "adieresis.sc", "ae.sc", "abreve.sc", "aogonek.sc", "A") { kern.x = -50m; } / p("y.sc", "Y") [diaComb? diaComb]? _;
+//p("v.sc", "w.sc", "V", "W") { kern.x = -100m; } / p("a.sc", "agrave.sc", "aacute.sc", "acircumflex.sc", "aring.sc", "atilde.sc", "adieresis.sc", "abreve.sc", "aogonek.sc", "A") [diaComb? diaComb]? _;
+//p("y.sc", "Y") { kern.x = -50m; } / p("a.sc", "agrave.sc", "aacute.sc", "acircumflex.sc", "aring.sc", "atilde.sc", "adieresis.sc", "abreve.sc", "aogonek.sc", "A") [diaComb? diaComb]? _;
+
+p("a.scalt") { kern.x = -40m; } / p("v.sc", "w.sc", "y.sc", "V", "W", "Y") [diaComb? diaComb]? _;
+
+
+if (sups && frsp)
+french_punct_sups { kern.x = 44m } / _ { u_frsp == 1 } ;
+p("colon.sups") { kern.x = 0m } / _ p("colon.sups");
+p("colon.sups") { kern.x = 0m } / p("colon.sups") _;
+french_punct_sups { kern.x = 0m } / leftpunct_sups _;
+french_punct_sups { kern.x = 0m } / quots_sups _ quots_sups;
+french_punct_sups { kern.x = 0m } / p("guillemotright.sups") _ p("guillemotleft.sups");
+
+// guillemets
+
+letters_sups { kern.x = 50m } / p("guillemotleft.sups") _;
+p("guillemotright.sups") { kern.x = 62m } / letters_sups _;
+quots_sups { kern.x = 50m } / p("guillemotleft.sups") _;
+p("guillemotright.sups") { kern.x = 62m } / quots_sups _;
+p("guillemotright.sups") { kern.x = 62m } / french_punct_sups _;
+endif;
+
+"""
+	if "Libertine_DR" in params[1]:
+		print >>out, """
+// Catalan l periodcentered l
+
+p("dotaccent") { kern.x = -120m; shift.y = -275m; } / p("l") _ p("l"); 
+p("l") { kern.x = -120m; } / p("l") p("dotaccent") _; 
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -260m; } / p("L") _ p("L"); 
+"""
+	if "Libertine_RI" in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 43m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 43m; } / p("ellipsis") _;
+p("period") { kern.x = 43m; } / p("period") {u_dotted == 1} _;
+
+if (para)
+p("three.taboldstyle", "five.taboldstyle", "nine.taboldstyle") { kern.x = 100; } / parleft _; 
+endif;
+
+p("quoteright") { kern.x = 35m; } / p("f_f") _;
+p("bracketright") { kern.x = 40m; } / p("f.short") _;
+
+// Catalan l
+p("dotaccent") { kern.x = -190m; shift.y = -275m; } / p("l") _ p("l"); 
+p("l") { kern.x = -50m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 60m; adv.x = 0; shift.y = -300m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 75m; adv.x = 0; shift.y = -385m; } / p("l.sc") _ p("l.sc"); 
+
+"""
+	if "Libertine_RZI" in params[1] or "Libertine_RBI" in params[1] or "Libertine_RI" in params[1]:
+		print >>out, """
+
+// Catalan l periodcentered l
+
+p("dotaccent") { kern.x = -200m; shift.y = -275m; } / p("l") _ p("l"); 
+p("l") { kern.x = -40m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -260m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 30m; adv.x = 0; shift.y = -300m; } / p("l.sc") _ p("l.sc"); 
+
+//p("dotaccent") { kern.x = -125m; shift.y = -250m; } / p("l") _ p("l"); 
+//p("l") { kern.x = -125m; } / p("l") p("dotaccent") _; 
+
+//p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -250m; } / p("L") _ p("L"); 
+//p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -350m; } / p("l.sc") _ p("l.sc"); 
+
+// fix: f + quation mark
+p("quotedblright") { kern.x = 150; } / p("f", "f_f") _; 
+p("parenright", "bracketright", "braceright") { kern.x = 150; } / p("f", "f_f") _; 
+fkernj { kern.x = 150; } / p("parenleft", "bracketleft", "braceleft") _; 
+
+if (lng == HUN)
+// fkern { kern.x = 50; } / p("g") _; // fix gf (typical morpheme boundaries: "meg" + verb, "leg" + adjective (eg. megfelel, legfinomabb)
+p("b") { kern.x = -35; } / p("b") [diaComb? diaComb]? _; // bb
+p("z") { kern.x = -35; } / p("z") [diaComb? diaComb]? _; // zz
+p("y") { kern.x = -85; } / p("n") [diaComb? diaComb]? _; // ny
+p("y") { kern.x = -25; } / p("l", "t") [diaComb? diaComb]? _; // ly, ty
+endif;
+
+if (para) 
+p("quotedblright", "quoteright") { kern.x = -250; } / parright _; 
+parleft { kern.x = 150; } / p("quotedblleft", "quotedblrev", "quoteleft") _; 
+
+if (frsp)
+french_punct { kern.x = 85; } / parright _; 
+else
+french_punct { kern.x = -95; } / parright _; 
+endif;
+
+p("g", "p", "g_y", "J") { kern.x = 0; } / parleft _; 
+fkernj { kern.x = 150; } / parleft _; 
+p("exclam") { kern.x = 55; } / parleft _; 
+p("question", "ellipsis") { kern.x = -35; } / parleft _; 
+p("three.oldstyle", "five.oldstyle", "nine.oldstyle") { kern.x = 100; } / parleft _; 
+parright { kern.x = 25; } / p("A", "B", "D", "Agrave", "Aacute", "Adieresis", "Adieresis.alt", "L", "R", "ellipsis") _;
+parright { kern.x = 300; } / paraflkern _;
+parright { kern.x = 375; } / ffkern _;
+parright { kern.x = 235; } / csc3 _;
+parright { kern.x = 235; } / p("Adieresis.alt", "Odieresis.alt", "seven.fitted", "ohungarumlaut") _;
+p("W", "T", "exclam", "question") { kern.x = -175; } / parleft _; 
+letters { kern.x = -95; } / parleft _; 
+parright { kern.x = 95; } / letters _;
+p("space") { kern.x = -95; } / parright _; 
+parleft { kern.x = 95; } / p("space") _;
+numbers { kern.x = -95; } / parleft _; 
+parright { kern.x = 95; } / numbers _;
+parleft { kern.x = 125; } / letters _; // eg. example(s)
+endif;
+
+// italic correction
+
+if (itlc)
+ANY  { kern.x = -40m; } / u(0x0020) {u_itlc == 2} _;
+endif;
+"""
+	if "LinLibertine_DR." in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 47m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 47m; } / p("ellipsis") _;
+p("period") { kern.x = 47m; } / p("period") {u_dotted == 1} _;
+
+p("odieresis", "ohungarumlaut") { kern.x = -35m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+p("eacute", "uacute", "ugrave", "udieresis", "uhungarumlaut") { kern.x = -15m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+"""
+	if "LinLibertine_R." in params[1] or "Libertine_RB." in params[1]:
+		print >>out, """
+p("J", "j", "f", "f_i", "f_j") { kern.x = 75m } / p("quotedblbase") _;
+p("o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -60m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("odieresis", "ohungarumlaut", "uacute", "ugrave", "udieresis", "uhungarumlaut") { kern.x = -45m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+p("ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -75m } / p("T") [diaComb? diaComb]? _;
+"""
+	if "Libertine_RBI" in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 48m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 48m; } / p("ellipsis") _;
+p("period") { kern.x = 42m; } / p("period") {u_dotted == 1} _;
+
+//p("j.short") { kern.x = -20m } / p("g") [diaComb? diaComb]? _;
+//u(0xE0FA, 0xE0FC, 0xE0FD) { kern.x = -20m } / p("g") [diaComb? diaComb]? _;
+p("J", "j", "f", "f_i") { kern.x = 75m } / p("quotedblbase") _;
+p("V", "W", "Y") { kern.x = -55m } / p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt") [diaComb? diaComb]? _;
+p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt") { kern.x = -55m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") { kern.x = -55m } / p("v.sc", "w.sc", "y.sc") [diaComb? diaComb]? _;
+p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") { kern.x = -80m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("V", "W", "Y", "v.sc", "w.sc", "y.sc") { kern.x = -30m } / p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") [diaComb? diaComb]? _;
+p("o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -50m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+
+"""
+	if "Libertine_RI" in params[1] or "Libertine_RBI" in params[1]:
+		print >>out, """
+u(0xE0FA, 0xE0FC, 0xE0FD) { kern.x = -20m } / p("g") [diaComb? diaComb]? _;
+"""
+	if "Libertine_RI" in params[1] or "Libertine_RBI" in params[1] or "Libertine_RZI" in params[1]:
+		print >>out, """
+p("j.short") { kern.x = -20m } / p("g") [diaComb? diaComb]? _;
+p("agrave", "aacute") { kern.x = -75m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+p("V", "W", "Y") { kern.x = -100m } / p("quotedblbase") _;
+p("v.sc", "w.sc", "y.sc") { kern.x = -75m } / p("quotedblbase") _;
+p("V", "W", "Y") { kern.x = -75m } / p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt") [diaComb? diaComb]? _;
+p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt") { kern.x = -75m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("v", "w", "y") { kern.x = -30m } / p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt") [diaComb? diaComb]? _;
+p("v.sc", "w.sc", "y.sc") { kern.x = -40m } / p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") [diaComb? diaComb]? _;
+p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") { kern.x = -40m } / p("v.sc", "w.sc", "y.sc") [diaComb? diaComb]? _;
+p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt", "a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") { kern.x = -50m } / p("V", "W", "Y", "v.sc", "w.sc", "y.sc") [diaComb? diaComb]? _;
+p("V", "W", "Y", "v.sc", "w.sc", "y.sc") { kern.x = -50m } / p("A", "Agrave", "Aacute", "Adieresis", "Adieresis.alt", "a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") [diaComb? diaComb]? _;
+
+p("eacute") { kern.x = -60m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("eacute", "oacute", "ohungarumlaut") { kern.x = -40m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+p("o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -60m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+
+//p("odieresis", "ohungarumlaut", "uacute", "ugrave", "udieresis", "uhungarumlaut") { kern.x = -45m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+//p("ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -75m } / p("T") [diaComb? diaComb]? _;
+"""
+	if "Libertine_RZ." in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 45m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 45m; } / p("ellipsis") _;
+p("period") { kern.x = 20m; } / p("period") {u_dotted == 1} _;
+
+p("J", "j", "f", "f_i", "f_j") { kern.x = 75m } / p("quotedblbase") [diaComb? diaComb]? _;
+p("o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -60m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+p("odieresis", "ohungarumlaut", "uacute", "ugrave", "udieresis", "uhungarumlaut") { kern.x = -45m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+p("ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc") { kern.x = -75m } / p("T") [diaComb? diaComb]? _;
+"""
+
+	if "Libertine_RZI" in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 8m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 4m; } / p("ellipsis") _;
+p("period") { kern.x = 6m; } / p("period") {u_dotted == 1} _;
+
+p("a.sc", "agrave.sc", "aacute.sc", "adieresis.sc") { kern.x = -50m } / p("V", "W", "Y") [diaComb? diaComb]? _;
+"""
+	if "Libertine_RB." in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 44m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 44m; } / p("ellipsis") _;
+p("period") { kern.x = 19m; } / p("period") {u_dotted == 1} _;
+
+// Catalan l periodcentered l
+
+p("dotaccent") { kern.x = -125m; shift.y = -250m; } / p("l") _ p("l"); 
+p("l") { kern.x = -125m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2 + 10m; adv.x = 0; shift.y = -250m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -300m; } / p("l.sc") _ p("l.sc"); 
+"""
+	if "Libertine_RZI" in params[1]:
+		print >>out, """
+//p("a", "agrave", "aacute", "adieresis", "e", "eacute", "egrave", "edieresis", "o", "oacute", "odieresis", "ohungarumlaut") { kern.x = -150 } / p("T", "V", "W", "Y") _;
+p("dotaccent") { kern.x = -200m; shift.y = -275m; } / p("l") _ p("l"); 
+p("l") { kern.x = -40m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -260m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 30m; adv.x = 0; shift.y = -300m; } / p("l.sc") _ p("l.sc"); 
+"""
+
+if "Biolinum_R." in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 44m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 44m; } / p("ellipsis") _;
+p("period") { kern.x = 44m; } / p("period") {u_dotted == 1} _;
+
+p("odieresis", "ohungarumlaut", "o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc", "uacute", "ugrave", "udieresis", "uhungarumlaut", "u.sc", "ugrave.sc", "uacute.sc", "udieresis.sc", "uhungarumlaut.sc") { kern.x = -45m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+
+p("dotaccent") { kern.x = -125m; shift.y = -250m; } / p("l") _ p("l"); 
+p("l") { kern.x = -125m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -250m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 50m; adv.x = 0; shift.y = -350m; } / p("l.sc") _ p("l.sc"); 
+"""
+elif "Biolinum_RB" in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 44m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 44m; } / p("ellipsis") _;
+p("period") { kern.x = 16m; } / p("period") {u_dotted == 1} _;
+
+p("odieresis", "ohungarumlaut", "o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc", "uacute", "ugrave", "udieresis", "uhungarumlaut", "u.sc", "ugrave.sc", "uacute.sc", "udieresis.sc", "uhungarumlaut.sc") { kern.x = -45m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+
+p("dotaccent") { kern.x = -125m; shift.y = -250m; } / p("l") _ p("l"); 
+p("l") { kern.x = -125m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -250m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2; adv.x = 0; shift.y = -350m; } / p("l.sc") _ p("l.sc"); 
+"""
+elif "Biolinum_RI" in params[1]:
+		print >>out, """
+p("ellipsis") { kern.x = 46m; } / p("ellipsis") _;
+p("period") { u_dotted = 1; kern.x = 46m; } / p("ellipsis") _;
+p("period") { kern.x = 46m; } / p("period") {u_dotted == 1} _;
+
+p("odieresis", "ohungarumlaut", "o.sc", "ograve.sc", "oacute.sc", "odieresis.sc", "ohungarumlaut.sc", "uacute", "ugrave", "udieresis", "uhungarumlaut", "u.sc", "ugrave.sc", "uacute.sc", "udieresis.sc", "uhungarumlaut.sc") { kern.x = -30m } / p("V", "W", "Y", "T") [diaComb? diaComb]? _;
+
+p("dotaccent") { kern.x = -200m; shift.y = -275m; } / p("l") _ p("l"); 
+p("l") { kern.x = -40m; } / p("l") p("dotaccent") _; 
+
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 50m; adv.x = 0; shift.y = -260m; } / p("L") _ p("L"); 
+p("dotaccent") { shift.x = -@1.bb.width / 2 - 100m; adv.x = 0; shift.y = -370m; } / p("l.sc") _ p("l.sc"); 
+"""
+
+for i in kern_pos:
+	print >>out, i
+
+print >>out, "endpass;"
+print >>out, "endtable;"
+
+def lang_condition(l):
+	try:
+		l2 = get_languages(font.getLookupInfo(font.getLookupOfSubtable(l)))
+	except: # sa01..
+		return ""
+	if languages == l2 or len(l2) == 0:
+		return ""
+	if "dflt" in l2:
+		return " && !(lng==" + string.join ((languages-l2)-set(["dflt"]), " || lng ==") + ")"
+	return " && (lng==" + string.join(l2, " || lng	==") + ")"
+
+print >>out, "table(sub) { MaxBackup = 100; MaxRuleLoop = 200 }"
+
+def addliga(pr, pr2):
+	pr = pr + "if (caps == 1) " + pr2.replace("/", "/ ANY")
+	pr = pr + "else if (caps == 3) " + pr2.replace("/", "/ csc123")
+	pr = pr + "else if (caps == 4) " + pr2.replace("/", "/ csc123ligd") + "else if (caps == 0) " + pr2 + " endif;"
+	return pr
+
+for i in lookups:
+	c = re.sub("[^a-zA-Z0-9]", "_", i)
+	l = i[1:5]
+	if (l == "case"):
+		# feature case is default, when the text is uppercased by caps == 2
+		if extended:
+			print >>out, "if (" + l + " || caps==2" + lang_condition(i) + ")"
+		else:
+			print >>out, "if (" + l + " " + lang_condition(i) + ")"
+	else:
+		print >>out, "if (" + l + lang_condition(i) + ")"
+	if l == "smcp" or l == "sups" or l == "onum" or l == "pnum":
+		print >>out, "class_" + c + "_1 > class_" + c + "_2 / ^_;"
+	elif extended:
+		print >>out, "if (caps == 0) class_" + c + "_1 > class_" + c + "_2 / ^_; endif;"
+		print >>out, "class_" + c + "_1 > class_" + c + "_2;"
+	else:
+		print >>out, "class_" + c + "_1 > class_" + c + "_2 / ^_;"		
+	if l == "onum" or l == "pnum" or  l == "zero":
+		print >>out, "if (arti) class_" + c + "_1 > class_" + c + "_2 / ^ ANY _; endif;"
+	if l == "fina":
+		print >>out, "class_" + c + "_1 > @1 / _ letters;"
+	print >>out, "endif;"
+	if l == "sups":
+		if LIBERTINE_R in params[1]:
+			print >>out, "if (texm) u(0x005E) p(\"hyphen\") > _ p(\"minus.superior\") / ^_; endif;"
+		print >>out, "if (texm) u(0x005E) class_" + c + "_1 > _ class_" + c + "_2 / ^_; endif;"
+	if l == "sinf":
+		print >>out, "if (texm) u(0x005F) class_" + c + "_1 > _ class_" + c + "_2 / ^_; endif;"
+
+def check(st):
+	a = st.splitlines(True)
+	for i in range(0, len(a)):
+		if a[i].find(".superior") > -1:
+			if not (set(re.sub("[^ .a-z]", "", a[i][a[i].find(">"):].replace("p(","")).lower().split()) <= glyphs_uni):
+				a[i] = "//" + a[i]
+	for i in range(0, len(a)):
+		if a[i].find("// CHECK") > 0 or re.match("(u.0x005C|u.0x200B)", a[i]):
+#			g = re.sub("0x", "uni", re.sub("[^ \+a-zA-Z0-9]", " ",a[i][a[i].find(">"):].replace("// CHECK",""))).lower().split()
+			g = re.findall("uni....", a[i].replace("0x", "uni"))
+			if not set(g) <= glyphs_uni:
+				a[i] = "//" + a[i]
+	return string.join(a)
+
+print >>out, check(gdldef.sub)
+
+if extended:
+	if "a.scalt" in font and not (params[1].find("RZI") > -1 or params[1].find("RBI") > -1):
+		print >>out, """
+if (smcp && (sa08 || salt))
+p("agrave.sc", "aacute.sc", "acircumflex.sc", "atilde.sc", "adieresis.sc", "aring.sc", "abreve.sc", "aogonek.sc") > p("a.scalt") u(0x0300, 0x0301, 0x0302, 0x0303, 0x0308, 0x030A, 0x0306, 0x0328)$1; 
+endif;
+"""
+	if "Libertine_RI" in params[1] or "Libertine_RZI" in params[1] or "Libertine_RBI" in params[1]:
+		print >>out, """
+if (para)
+p("parenleft", "parenright", "bracketleft", "bracketright", "braceleft", "braceright") > u(0xE102 .. 0xE107);
+endif;
+
+if (itlc)
+u(0x0020) > @2 { u_itlc = 1 } / ^ ANY _ { u_itlc == 0 };
+ANY > @1 { u_2itlc = 1 } / ^ _ { u_2itlc == 0 } ANY;
+u(0x0020) > @1 { u_itlc = 2 } / ^ _ { u_itlc == 0 };
+if (itlc==1)
+u(0x0020) > @1 { u_2itlc = 2 } u(0x2009) {u_2itlc = 2} / ^ _ { u_2itlc == 0 };
+else
+ANY > @1 { u_2itlc = 2 } u(0x2009) {u_2itlc = 2} / ^ _ { u_2itlc == 0 };
+endif;
+endif;
+"""
+	if params[1].find("RZI") > -1:
+		print >>out, "if (ss01) ss01RZI > ss01RZI2 / ^ _; endif;"
+	if "Libertine_DR" in params[1]:
+		print >>out, """
+if (ss02) p("R") > u(0xE0EC) / ^ _; endif;
+
+// Catalan l periodcentered l
+
+p("periodcentered") > p("dotaccent") / p("l", "L") _ p("l", "L");
+"""
+	else:
+		print >>out, """
+		// Catalan l periodcentered l
+
+p("periodcentered") > p("dotaccent") / p("l", "L", "l.sc") _ p("l", "L", "l.sc");
+"""
+		for i in scdiacritics:
+			print >>out, "if (smcp) scdiac" + i + " _ > scletter" + i + " u(" + combiningdiacritics[i] + ") / ^ _ _; endif;";
+		print >>out, """
+// fi correction with short f
+
+if (!liga)
+	p("f") p("i") _ > f_corr ZWSP @2 / ^ _ _ _;
+	p("f") p("f") p("i") _ > f_corr f_corr ZWSP @3 / ^ _ _ _ _;
+else if (caps == 0 && smcp == 0 && sups == 0 && sinf == 0 && ligc)
+// change single fi ligatures to <f.short i> after hyphenation
+// XXX quoation mark
+
+	p("f") p("i") > @2 {user4=1} @3 / ^ nonletter _ {user4==0} _; 
+	p("f") p("i") > @2 {user4=2} @3 / ^ ANY _ {user4==0} _; 
+	p("f") p("i") > @1 {user5=1} @2 / ^ _ {user5==0} _ nonletter; 
+	p("f") p("i") > @1 {user5=2} @2 / ^ _ {user5==0} _ ANY;
+ 
+	p("f") p("i") > f_corr @2 / ^ _ {user4 <= 1 && user5 <= 1} _; 
+
+
+//	nonletter p("f") p("i") > @1 @2 {user5=1} / ^ _ _ {user5 == 0} _ _; 
+//	ANY p("f") > @1 @2 {user4=1} / ^ _ _ {user4==0};
+//	nonletter p("f") p("i") _ >  @1 f_corr ZWSP @3 / ^ _ _ {user5==0} _ _;	
+//	p("f") p("i") nonletter _ >  f_corr ZWSP @2 @3 / ^ _ {user4==0} _ _ _;
+//	p("f") p("i") nonletter _ >  f_corr ZWSP @2 @3 / ^ _ {user4==0} _ _ _;
+
+//	p("f") p("i") > _ f_corr / _ {user4 == 0} _;
+
+endif;
+
+// case dependent combining diacritics (acutecomb -> acute.cap)
+u(0x0300 .. 0x0302, 0x030C, 0x0306, 0x030B, 0x030F, 0x0311, 0x0308, 0x0309) > u(0xE358..0xE35F, 0xE362..0xE363) / csc3 diaComb? _; 
+
+if (dbls)
+dblCap > dblCap2;
+endif;
+
+if (sups)
+p("space") > p("sixperemspace");
+u(0x202F) > p("hairspace");
+"""
+		if not "Biolinum" in params[1]:
+#			if "LinLibertine_R." in params[1]:
+#				print >>out, """p("hyphen") > p("hyphen.sups");"""
+			print >>out, "supsIN > supsOUT;";
+		if "LinLibertine_R." in params[1]:
+			for i in diacritics:
+				print >>out, "diac" + i.replace(".","") + " _ > letter" + i.replace(".","") + " u(" + combiningdiacritics[i.replace(".alt", "")] + ") / ^ _ _;";
+			print >>out, """
+u(0x0041..0x005A, 0x006C) p("gravecomb", "acutecomb", "uni0308", "uni030B") > @1 p("uniE0D5", "uniE0D6", "uniE0D7", "uniE0D8") / ^ _ _;
+p("f") p("f") > _ u(0xE1B4);
+p("f") p("i") > _ u(0xE1B5);
+p("f") p("l") > _ u(0xE1B6);
+p("f") p("f") p("i") > _ _ u(0xE1B7);
+p("f") p("f") p("l") > _ _ u(0xE1B8);
+p("f") p("j") > _ u(0xE1B9);
+p("f") p("f") p("j") > _ _ u(0xE1BA);
+p("ae", "oe", "oslash", "eth", "thorn", "dcaron", "dcroat", "lcaron", "lslash", "tcaron") > u(0xE1BB .. 0xE1C4);
+p("AE", "OE", "Oslash", "Eth", "Thorn", "Dcroat", "Lcaron", "Lslash") > u(0xE1C6 .. 0xE1CD);
+
+// Catalan l.l
+
+if (sups)
+p("periodcentered") > p("dotaccent.sups") / p("l.superior", "uniE16D") _ p("l.superior", "uniE16D", "l", "L");
+endif;
+"""
+		print >>out, "endif;"
+	if onefifth:
+		print >>out, """
+if (frac==1)
+p("one") slashes p("five") > p("onefifth") / ^_ _ _ ;
+p("two") slashes p("five") > p("twofifths") / ^_ _ _ ;
+p("three") slashes p("five") > p("threefifths") / ^_ _ _ ;
+p("four") slashes p("five") > p("fourfifths") / ^_ _ _ ;
+p("one") slashes p("six") > p("onesixth") / ^_ _ _ ;
+p("five") slashes p("six") > p("fivesixths") / ^_ _ _ ;
+p("one") slashes p("eight") > p("oneeighth") / ^_ _ _ ;
+p("three") slashes p("eight") > p("threeeighths") / ^_ _ _ ;
+p("five") slashes p("eight") > p("fiveeighths") / ^_ _ _ ;
+p("seven") slashes p("eight") > p("seveneighths") / ^_ _ _ ;
+p("one") slashes > @2 @3 / dd ^_ _ ;
+p("one") slashes > p("onenumerator") / ^_ _ ;
+endif;
+"""
+
+	if Libertine_It:
+		print >>out, """
+if (lng == NLD && caps != 2)
+	if (dlig)
+		p("b") p("i") p("j") p("o") p("u") p("x") _ > @1 @2 ZWSP @3 @4 @5 @6 / ^_ _ _ _ _ _ _;
+		p("b") p("i") p("j") p("e") p("c") p("t") p("i") p("e") _ > @1 @2 ZWSP @3 @4 @5 @6 @7 @8 / ^ _ _ _ _ _ _ _ _ _;
+		p("i") p("j") > u(0x0133) _;
+	endif;
+endif;
+
+// f + edieresis, f + odieresis, f + parenthesis, f + apostrophe corrections with short f
+
+if (!sups && !sinf && !smcp)
+p(\"f\") > f_corr / ^_ (u(0x00EB), u(0x00F6), quots, parright, p("parenright", "bracketright", "braceright", "quoteright"));
+//p(\"f\") > f_corr / ^_ parright;
+//p(\"f\") > f_corr / ^_ p("parenright", "bracketright", "braceright");
+
+endif;
+"""
+
+	print >>out, gdldef.sub_linlib
+	# set smcp for Linux Libertine Bold Italic
+	if (params[1].find("ZI") > -1):
+		print >>out, gdldef.sub_linlibBI
+		SMCPfix = " && !smcp  && !sups"
+	if Qu_sc:
+		print >>out, "if (liga && smcp && !c2sc && !sups) p(\"Q\") p(\"u\") > _ p(\"Q_u.sc\"); endif;"
+	if Germandbls_alt:
+		print >>out, "if (ss03 && c2sc) p(\"Germandbls.alt\") > p(\"germandbls.scalt\"); endif;"
+
+for i in lookupl:
+	c = re.sub("[^a-zA-Z0-9]", "_", i)
+	l = i[1:5] + SMCPfix # short fix for the different priorities
+
+	print >>out, "if (" + l + lang_condition(i) + ")"
+
+	for j in range(0, len(lookupl[i][0])):
+		diflen = len(lookupl[i][1][j])
+		pr = "p(\"" + string.join(lookupl[i][1][j], "\") p(\"") + "\") > p(\"" + lookupl[i][0][j] +  "\") / ^" + "_ " * diflen + ";"
+		# remove unconditional ellipsis replacement to fix dotted tabulation of LibreOffice
+		if lookupl[i][0][j] == "ellipsis":
+			continue
+		if lookupl[i][0][j] in ["T_h"]:
+			pr = "if (lith) " + pr.replace("^_", "^_ { u_exclam == 0 }") + "endif;"
+		if lookupl[i][0][j] in ["t_t"]:
+			pr = "if (litt) " + pr.replace("^_", "^_ { u_exclam == 0 }") + "endif;"
+		if lookupl[i][0][j] in ["exclamdbl", "question_question", "exclam_question", "question_exclam"]:
+			pr1 = pr[0: pr.find(">")]
+			pr2 = pr1 + ">" + pr1.replace(")", ") { u_exclam = 1}") + "/ ^_ {u_exclam == 0} _ sentenceend;"
+			pr3 = pr1 + ">" + pr1.replace(")", ") { u_exclam = 1}") + "/ sentenceend ^_ {u_exclam == 0} _;"
+			pr = pr2 + pr3 + "if (!frsp) " + pr.replace("^_", "^_ { u_exclam == 0 }") + "endif;"
+		elif extended:
+			pr = addliga("", pr)
+			if lookupl[i][0][j] == "Q_u": # and f_f_j:
+				pr = pr + "if (caps != 2) p(\"Q\") p(\"u\") > p(\"Q_u\") / ^_ _; endif;"
+			# removing t_t substitution temporarily to fix frequent kerning problem with Hungarian hyphenation
+			#if lookupl[i][0][j] == "t_t":
+			#	pr = "if (lng!=HUN)" + pr + "endif;"
+			if lookupl[i][0][j] == "f_i": # and f_f_j:
+				if not "f_j" in font:
+					pr = addliga(pr, "p(\"f\") p(\"j\") > u(0xE037) / ^_ _;")
+				if not "f_f_j" in font:
+					pr = addliga(pr, "p(\"f\") p(\"f\") p(\"j\") > u(0xE033) / ^_ _ _;")
+				if not "f_f_i" in font and "Libertine_RBI" in params[1]:
+					pr = addliga(pr, "p(\"f\") p(\"f\") p(\"i\") > u(0xFB03) / ^_ _ _;")
+				if Libertine_It or "Libertine_RBI" in params[1] or "Libertine_RZI" in params[1]:
+					pr = pr + "if (lng==HUN)" + addliga("", "p(\"g\") p(\"y\") > _ p(\"g_y\") / ^_ _;") + "endif;" 
+				if Libertine_It or "Libertine_RI" in params[1] or "Libertine_RBI" in params[1] or "Libertine_RZI" in params[1] or "Libertine_RB." in params[1]:
+					pr = addliga(pr, "p(\"j\") > p(\"j.short\") / p(\"g\") ^ _;") 
+				if Libertine_It or "Libertine_RBI" in params[1]:
+					pr = addliga(pr, "p(\"f\") > p(\"uniE0FA\") / p(\"g\") ^ _;") 
+					pr = addliga(pr, "p(\"f\") > p(\"uniE0FD\") / p(\"g\") ^ _ p(\"odieresis\");") 
+					pr = addliga(pr, "p(\"f\") p(\"i\") > p(\"uniE0FC\") / p(\"g\") ^ _ _;") 
+				if Libertine_It:
+					pr = pr + "if (lng==NLD) p(\"J\") > p(\"J.alt\"); endif;" 
+			if lookupl[i][0][j] == "c_k" or lookupl[i][0][j] == "c_h" or lookupl[i][0][j] == "t_z":
+				pr = "if (lng == DEU)" + pr + "endif;"
+				if Libertine_It and i[1:5] == "dlig":
+					pr = pr + "if (lng==NLD)" + addliga("", "p(\"i\") p(\"j\") > _ u(0x0133);") + "endif;" 
+#			if Libertine_It:
+#				pr = addliga(pr, "p(\"f\") u(0x00F6) > f_corr @2 / ^_ _;")
+
+		print >>out, pr
+	print >>out, "endif;"
+ 
+print >>out, "endtable;"
+

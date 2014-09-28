@@ -1,0 +1,16 @@
+Generating Linux Libertine G under Linux
+
+1. Copy Linux Libertine 5.1.3-2 sfd source directory SRC and otf/ttf Fonts to the Fonts/ subdirectory
+2. Install grcompiler of SILGraphite project, ttfautohint of FreeType project and Fontforge with
+   Python support
+3. Create input0/, input/, output/ and hint/ directories
+3. Run cpglyph.history, fontname.history and generate2:
+
+. cpglyph.history
+. fontname.history
+./generate2
+
+The results will be in the hint/.
+
+László Németh
+nemeth at numbertext org

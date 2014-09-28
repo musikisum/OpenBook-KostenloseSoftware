@@ -1,0 +1,33 @@
+anregungen
+filme
+images/*.psd
+images/file000663582989.jpg
+images/gimp/Alphakanalbilder-5.xcf
+images/converter/*.psd
+images/morguefiles/Entenbild.xcf
+images/morguefiles/file8671339851393 .jpg
+images/morguefiles/file9301241273489.jpg
+images/morguefiles/Schwanfamilie.xcf
+images/svgUndEps/*.svg
+images/svgUndEps/baby_tux_01.eps
+images/svgUndEps/licht.eps
+korrekturen
+manuals
+menuette/*.sib
+ShortCuts
+
+Kaiser_KostenloseSoftware_release_2014-09-24-mAnschnitt.pdf
+Kaiser_KostenloseSoftware_release_2014-09-24-oAnschnitt.pdf
+
+*.docx
+*.xlsx
+*.sib
+Merkkaefer.pdf
+Merkkaefer.sla
+U1-U4.sla
+*.sla.*
+
+# Office Temp Files
+~$*
+# vim Temp Files
+*~

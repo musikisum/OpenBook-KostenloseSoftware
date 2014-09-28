@@ -1,0 +1,15 @@
+#!/bin/sh
+python cpglyph.py extra/ExtraLinBiolinum_RB.ttf SRC/LinBiolinum_RB*sfd input0 Aacute
+python cpglyph.py extra/ExtraLinLibertine_R.ttf SRC/LinBiolinum_R.sfd input0
+python cpglyph.py extra/ExtraLinLibertine_R.ttf SRC/LinBiolinum_RI*sfd input0
+python cpglyph.py extra/ExtraLinLibertine_R.ttf  SRC/LinLibertine_R.sfd input0 uni2731 uni0170 e.superior uniE17D uniE1B4 uniE1B5 uniE1B6 uniE1B7 uniE1B8 uniE1B9 uniE1BA uniE1BB uniE1BC uniE1BD uniE1BE uniE1BF uniE1C0 uniE1C1 uniE1C2 uniE1C3 uniE1C4 uniE1C5
+python cpglyph.py extra/ExtraLinLibertine_RI.ttf  SRC/LinLibertine_RI.sfd input0 uniE0F7 uniE0F8 uniE0FA uniE0FC uniE0FD uni0170 uni0171 uni0150 uni0151 uniE102 uniE103 uniE104 uniE105 uniE106 uniE107 uniE083 uniE08A uniE0A5 uniE0AE
+python cpglyph.py extra/ExtraLinLibertine_RZ.ttf  SRC/LinLibertine_RZ.sfd input0 unie033
+
+python cpglyph.py extra/ExtraLinLibertine_RZI.ttf  SRC/LinLibertine_RZI.sfd input0 unie033 unie037 uniE0F7 uniE0F8 uni0171 uniE102 uniE103 uniE104 uniE105 uniE106 uniE107
+
+python cpglyph.py extra/ExtraLinLibertine_RB.ttf  SRC/LinLibertine_RB.sfd input0 unie033 uniE0F8 uni0150 uni0170 uniE0A5
+
+python cpglyph.py extra/ExtraLinLibertine_RBI.ttf  SRC/LinLibertine_RBI.sfd input0 uniE033 uniE037 uni0150 uni0151 uni0170 uni0171 uni0218 uni0219 uni021A uni021B uniE0F7 uniE0F8 uniE0FA uniE0FC uniE0FD uniFB01 uniFB03 uniE102 uniE103 uniE104 uniE105 uniE106 uniE107 uniE0A5 uniE086 uniE08C
+
+python cpglyph.py extra/ExtraLinLibertine_DR.ttf  SRC/LinLibertine_DR.sfd input0 f_f_i uniE033 uniE037 uniE0EC uni0150 uni00c1

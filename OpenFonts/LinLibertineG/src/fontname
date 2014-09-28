@@ -1,0 +1,33 @@
+#!/usr/bin/python
+import sys
+import fontforge
+import re
+
+if len(sys.argv) < 5:
+	print "fontname - rename fonts"
+	print "Usage: fontname source_file target_file new_font_name new_human_name new_fontfamily_name [copyright_extension]"
+	sys.exit(1)
+
+
+font=fontforge.open(sys.argv[1])
+
+font.fontname = sys.argv[3]
+font.fullname = sys.argv[4]
+font.familyname = sys.argv[5]
+
+# fix subfamily name problem
+
+if str(font.sfnt_names).find("'B'") > -1:
+	font.appendSFNTName("English (US)", "SubFamily", "Bold")
+
+if len(sys.argv) == 7:
+	font.copyright = font.copyright + sys.argv[6]
+
+font.selection.all()
+font.unlinkReferences()
+font.removeOverlap()
+font.em = 2048
+font.autoInstr()
+
+fn = re.sub("^[^/]*/", "", sys.argv[1])
+font.generate(sys.argv[2] + "/" + fn.replace(".sfd", ".ttf"), "old-kern", "opentype")

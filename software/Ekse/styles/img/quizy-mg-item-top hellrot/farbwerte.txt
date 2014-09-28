@@ -1,0 +1,3 @@
+headerBackgroundColor: #04819E
+lineColor: #BC0808
+Color: white

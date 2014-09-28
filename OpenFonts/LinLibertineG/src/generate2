@@ -1,0 +1,17 @@
+#!/bin/sh
+for i in Fonts/Lin*.otf
+do
+	echo $i
+	name="`basename $i .otf`"
+	echo otf2gdl...
+	./otf2gdl -e $i ${name}.gdl 
+	echo Graphic compiler...
+	grcompiler -v2 ${name}.gdl input/${name}.ttf output/${name}_G.ttf
+	#wine GrCompiler.exe -v2 ${name}.gdl input/${name}.ttf output/${name}_G.ttf
+	echo Hinting...
+	ttfautohint -f output/${name}_G.ttf hint/${name}_G.ttf
+	#cp  output/${name}_G.ttf hint/${name}_G.ttf
+done
+sudo cp hint/Lin*.ttf /usr/share/fonts/truetype/
+sudo fc-cache
+/opt/libreoffice/program/soffice -writer
