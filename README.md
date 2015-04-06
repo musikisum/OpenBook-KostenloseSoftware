@@ -1,5 +1,7 @@
 # OpenBook 'Kostenlose Software'
 
+![Kostenlose Software für den Musikunterricht](images/kaiser_kostenloseSoftware.jpg)
+
 Citation: Ulrich Kaiser, Kostenlose Software für den Musikunterricht. (= OpenBook 7), Arbeitsheft, inkl. Materialien, Software und Videos, Karlsfeld 2014.
 
 ## License
