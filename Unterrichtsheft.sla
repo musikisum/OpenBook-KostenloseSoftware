@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<SCRIBUSUTF8NEW Version="1.4.3">
+<SCRIBUSUTF8NEW Version="1.4.5">
     <DOCUMENT ANZPAGES="60" PAGEWIDTH="595.28125984252" PAGEHEIGHT="841.889763779528" BORDERLEFT="56.6929133858268" BORDERRIGHT="56.6929133858268" BORDERTOP="56.6929133858268" BORDERBOTTOM="56.6929133858268" PRESET="0" BleedTop="8.50110236220473" BleedLeft="8.50110236220473" BleedRight="8.50110236220473" BleedBottom="8.50110236220473" ORIENTATION="0" PAGESIZE="A4" FIRSTNUM="1" BOOK="1" AUTOSPALTEN="1" ABSTSPALTEN="3.881" UNITS="1" DFONT="Arial Regular" DSIZE="12" DCOL="1" DGAP="0" TabFill="" TabWidth="36" AUTHOR="" COMMENTS="" KEYWORDS="" PUBLISHER="" DOCDATE="" DOCTYPE="" DOCFORMAT="" DOCIDENT="" DOCSOURCE="" DOCLANGINFO="" DOCRELATION="" DOCCOVER="" DOCRIGHTS="" DOCCONTRIB="" TITLE="" SUBJECT="" VHOCH="33" VHOCHSC="66" VTIEF="33" VTIEFSC="66" VKAPIT="75" BASEGRID="15" BASEO="0" AUTOL="20" UnderlinePos="-1" UnderlineWidth="-1" StrikeThruPos="-1" StrikeThruWidth="-1" GROUPC="25" HCMS="1" DPSo="0" DPSFo="0" DPuse="1" DPgam="0" DPbla="1" DPMo="sRGB IEC61966-2.1" DPPr="Fogra27L CMYK Coated Press" DPIn="sRGB IEC61966-2.1" DPInCMYK="Fogra27L CMYK Coated Press" DPIn2="sRGB IEC61966-2.1" DPIn3="Fogra27L CMYK Coated Press" DISc="1" DIIm="0" ALAYER="0" LANGUAGE="German" MINWORDLEN="3" HYCOUNT="2" AUTOMATIC="1" AUTOCHECK="1" GUIDELOCK="0" SnapToGuides="1" SnapToGrid="0" MINGRID="20.0012598425197" MAJGRID="100.00062992126" SHOWGRID="0" SHOWGUIDES="1" showcolborders="1" SHOWFRAME="0" SHOWLAYERM="0" SHOWMARGIN="1" SHOWBASE="0" SHOWPICT="1" SHOWControl="0" SHOWLINK="1" rulerMode="1" showrulers="1" showBleed="1" rulerXoffset="0" rulerYoffset="0" GuideRad="10" GRAB="4" POLYC="6" POLYF="1.15470053837925" POLYR="61" POLYCUR="1" POLYFD="100" POLYS="1" AutoSave="1" AutoSaveTime="600000" ScratchBottom="20.0012598425197" ScratchLeft="100.00062992126" ScratchRight="100.00062992126" ScratchTop="20.0012598425197" GapHorizontal="0" GapVertical="39.9996850393701" StartArrow="0" EndArrow="0" PEN="Black" BRUSH="None" PENLINE="Black" PENTEXT="Black" StrokeText="Black" TextBackGround="None" TextLineColor="None" TextBackGroundShade="100" TextLineShade="100" TextPenShade="100" TextStrokeShade="100" STIL="1" STILLINE="1" WIDTH="1" WIDTHLINE="1" PENSHADE="100" LINESHADE="100" BRUSHSHADE="100" MAGMIN="10" MAGMAX="3200" MAGSTEP="200" CPICT="None" PICTSHADE="100" PICTSCX="1" PICTSCY="1" PSCALE="1" PASPECT="1" EmbeddedPath="0" HalfRes="1" dispX="0" dispY="0" constrain="15" MINORC="#00ff00" MAJORC="#00ff00" GuideC="#000080" BaseC="#c0c0c0" GuideZ="10" BACKG="1" PAGEC="#ffffff" MARGC="#0000ff" RANDF="0" currentProfile="PDF 1.4">
         <CheckProfile Name="PDF 1.3" ignoreErrors="0" autoCheck="1" checkGlyphs="1" checkOrphans="1" checkOverflow="1" checkPictures="1" checkResolution="1" checkTransparency="1" minResolution="144" maxResolution="2400" checkAnnotations="0" checkRasterPDF="1" checkForGIF="1" ignoreOffLayers="0" checkOffConflictLayers="0"/>
         <CheckProfile Name="PDF 1.4" ignoreErrors="0" autoCheck="1" checkGlyphs="1" checkOrphans="1" checkOverflow="1" checkPictures="1" checkResolution="1" checkTransparency="0" minResolution="144" maxResolution="2400" checkAnnotations="0" checkRasterPDF="1" checkForGIF="1" ignoreOffLayers="0" checkOffConflictLayers="0"/>
@@ -83,7 +83,7 @@
             <Separation Name="Gelb"/>
             <Separation Name="Schwarz"/>
         </Printer>
-        <PDF firstUse="0" Thumbnails="0" Articles="0" Bookmarks="0" Compress="1" CMethod="0" Quality="0" MirrorH="0" MirrorV="0" Clip="0" RotateDeg="0" PresentMode="0" RecalcPic="1" Grayscale="0" RGBMode="0" UseProfiles="0" UseProfiles2="0" Binding="0" PicRes="300" Resolution="300" Version="14" Intent="1" Intent2="0" SolidP="sRGB IEC61966-2.1" ImageP="sRGB IEC61966-2.1" PrintP="Fogra27L CMYK Coated Press" InfoString="Infotext" BTop="0" BLeft="0" BRight="0" BBottom="0" useDocBleeds="1" cropMarks="0" bleedMarks="0" registrationMarks="0" colorMarks="0" docInfoMarks="0" markOffset="0" ImagePr="1" PassOwner="" PassUser="" Permissions="-4" Encrypt="0" UseLayers="0" UseLpi="0" UseSpotColors="1" doMultiFile="0" displayBookmarks="0" displayFullscreen="0" displayLayers="0" displayThumbs="1" hideMenuBar="0" hideToolBar="0" fitWindow="0" PageLayout="2" openAction="">
+        <PDF firstUse="0" Thumbnails="0" Articles="0" Bookmarks="0" Compress="1" CMethod="0" Quality="0" EmbedPDF="0" MirrorH="0" MirrorV="0" Clip="0" RotateDeg="0" PresentMode="0" RecalcPic="0" Grayscale="0" RGBMode="0" UseProfiles="0" UseProfiles2="0" Binding="0" PicRes="300" Resolution="300" Version="14" Intent="1" Intent2="0" SolidP="sRGB IEC61966-2.1" ImageP="sRGB IEC61966-2.1" PrintP="Fogra27L CMYK Coated Press" InfoString="Infotext" BTop="0" BLeft="0" BRight="0" BBottom="0" useDocBleeds="0" cropMarks="0" bleedMarks="0" registrationMarks="0" colorMarks="0" docInfoMarks="0" markOffset="0" ImagePr="1" PassOwner="" PassUser="" Permissions="-4" Encrypt="0" UseLayers="0" UseLpi="0" UseSpotColors="1" doMultiFile="0" displayBookmarks="0" displayFullscreen="0" displayLayers="0" displayThumbs="1" hideMenuBar="0" hideToolBar="0" fitWindow="0" PageLayout="2" openAction="">
             <Fonts Name="Bitstream Vera Sans Bold"/>
             <Fonts Name="Bitstream Vera Sans Oblique"/>
             <Fonts Name="Bitstream Vera Sans Roman"/>
@@ -91,13 +91,13 @@
             <Fonts Name="Bitstream Vera Serif Roman"/>
             <Fonts Name="Bradley Gratis Regular"/>
             <Fonts Name="Corben Bold"/>
-            <Fonts Name="DejaVu LGC Serif Bold"/>
             <Fonts Name="Inconsolata Medium"/>
             <Fonts Name="Junicode Bold"/>
             <Fonts Name="Junicode Regular"/>
             <Fonts Name="Keypad ADF Normal"/>
             <Fonts Name="Liberation Sans Bold"/>
             <Fonts Name="Linux Libertine G Regular"/>
+            <Subset Name="DejaVu LGC Serif Bold"/>
             <Subset Name="DejaVu Sans Book"/>
             <Effekte pageEffectDuration="1" pageViewDuration="1" effectType="0" Dm="0" M="0" Di="0"/>
             <Effekte pageEffectDuration="1" pageViewDuration="1" effectType="0" Dm="0" M="0" Di="0"/>
@@ -5853,7 +5853,7 @@
             <para PARENT="Absatz ohne Einzug"/>
             <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="b"/>
             <ITEXT CH="+"/>
-            <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="a"/>
+            <ITEXT CPARENT="Keypad" CH="c"/>
             <ITEXT CH="+"/>
             <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="I"/>
             <tab CPARENT="Keypad"/>
@@ -5893,7 +5893,7 @@
             <para PARENT="Absatz ohne Einzug"/>
             <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="b"/>
             <ITEXT CH="+"/>
-            <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="a"/>
+            <ITEXT CPARENT="Keypad" CH="c"/>
             <ITEXT CH="+"/>
             <ITEXT CPARENT="Keypad" FONT="Keypad ADF Normal" CH="K"/>
             <tab CPARENT="Keypad"/>
